@@ -34,6 +34,8 @@ body {
   gap: 12px;
   font-size: 18px;
   font-weight: 600;
+  color: #fff;
+  text-decoration: none;
 }
 
 .brand-mark {
@@ -55,6 +57,10 @@ body {
   width: min(680px, 100%);
 }
 
+.auth-card {
+  width: min(460px, 100%);
+}
+
 .card-title {
   font-size: 18px;
   font-weight: 600;
@@ -69,6 +75,30 @@ body {
   display: flex;
   gap: 12px;
   margin-top: 24px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-greeting {
+  font-size: 14px;
+}
+
+.full-button {
+  width: 100%;
+}
+
+.form-help {
+  margin: 18px 0 0;
+  text-align: center;
+  color: #6b7280;
+}
+
+.form-help a {
+  color: #2563eb;
 }
 
 @media (max-width: 560px) {

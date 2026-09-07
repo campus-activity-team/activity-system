@@ -4,6 +4,10 @@ import com.example.activity.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +28,16 @@ public class GlobalExceptionHandler {
         FieldError fieldError = exception.getBindingResult().getFieldError();
         String message = fieldError == null ? "请求参数不合法" : Objects.requireNonNullElse(fieldError.getDefaultMessage(), "请求参数不合法");
         return response(400, message, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({BadCredentialsException.class, DisabledException.class, AuthenticationException.class})
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException exception) {
+        return response(401, "用户名或密码错误，或账号已被禁用", HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(DataIntegrityViolationException exception) {
+        return response(409, "数据已存在或违反唯一约束", HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(Exception.class)

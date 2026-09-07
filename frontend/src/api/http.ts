@@ -5,6 +5,14 @@ export const http = axios.create({
   timeout: 10_000,
 })
 
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('activity-system-token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 export interface HealthResponse {
   code: number
   message: string

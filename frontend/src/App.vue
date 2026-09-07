@@ -1,43 +1,41 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getHealth } from './api/http'
+import { useAuthStore } from './stores/auth'
 
-const backendStatus = ref('检查中')
+const router = useRouter()
+const auth = useAuthStore()
 
-async function checkBackend() {
-  backendStatus.value = '检查中'
-  try {
-    const response = await getHealth()
-    backendStatus.value = response.data.data.status === 'UP' ? '在线' : '异常'
-  } catch {
-    backendStatus.value = '未连接'
-    ElMessage.info('后端尚未启动，可先查看 README 中的启动方式')
-  }
+onMounted(() => auth.loadCurrentUser())
+
+async function logout() {
+  await auth.logout()
+  ElMessage.success('已退出登录')
+  await router.push({ name: 'login' })
 }
-
-checkBackend()
 </script>
 
 <template>
   <el-container class="app-shell">
     <el-header class="app-header">
-      <div class="brand">
+      <router-link class="brand" to="/">
         <span class="brand-mark">A</span>
         <span>活动报名与签到系统</span>
+      </router-link>
+      <div class="header-actions">
+        <template v-if="auth.isAuthenticated">
+          <span class="user-greeting">{{ auth.user?.name }}</span>
+          <el-button link type="info" @click="logout">退出</el-button>
+        </template>
+        <template v-else>
+          <el-button link type="info" @click="router.push('/login')">登录</el-button>
+          <el-button link type="info" @click="router.push('/register')">注册</el-button>
+        </template>
       </div>
-      <el-tag :type="backendStatus === '在线' ? 'success' : 'info'">后端：{{ backendStatus }}</el-tag>
     </el-header>
     <el-main class="app-main">
-      <el-card class="welcome-card" shadow="never">
-        <template #header>
-          <div class="card-title">Phase 1 项目基础已就绪</div>
-        </template>
-        <p>前后端分离骨架、统一 API 返回结构、异常处理、MySQL/Redis 配置和 Docker 编排已完成。</p>
-        <div class="actions">
-          <el-button type="primary" @click="checkBackend">重新检查后端</el-button>
-        </div>
-      </el-card>
+      <router-view />
     </el-main>
   </el-container>
 </template>

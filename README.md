@@ -72,8 +72,10 @@ npm run dev
 - MySQL/Redis 配置及完整核心业务表初始化脚本
 - Vue 3/TypeScript/Vite 前端壳、API 客户端和后端状态检查页
 - Docker Compose、后端/前端生产镜像配置
+- Phase 2 用户注册、登录、退出、JWT 认证和角色权限基础设施
+- 前端登录/注册页面、路由守卫和浏览器令牌持久化
 
-Phase 2 将实现注册、登录、JWT 和 RBAC。当前尚未创建默认账号，也不会在数据库脚本中写入明文密码。
+开发 Profile 会自动初始化演示账号：`admin/admin123`、`organizer/organizer123`、`student/student123`。这些账号仅供本地开发，生产环境不会初始化。
 
 ## 验证
 
@@ -83,3 +85,17 @@ cd frontend && npm run build
 ```
 
 若本机没有 Java/Maven 但已安装 Docker，可使用 Docker Compose 进行构建；若两者都未安装，需要先准备对应环境。
+
+## 认证请求示例
+
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"student","password":"student123"}'
+```
+
+将返回的 `data.token` 放入后续请求头：
+
+```text
+Authorization: Bearer <token>
+```
