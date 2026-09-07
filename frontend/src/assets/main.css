@@ -1,0 +1,82 @@
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2937;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  color: #fff;
+  background: linear-gradient(120deg, #2563eb, #4f46e5);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.brand-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-main {
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+}
+
+.welcome-card {
+  width: min(680px, 100%);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.welcome-card p {
+  line-height: 1.8;
+  color: #4b5563;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 560px) {
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .brand {
+    font-size: 15px;
+  }
+}

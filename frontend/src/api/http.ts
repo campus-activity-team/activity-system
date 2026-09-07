@@ -1,0 +1,19 @@
+import axios from 'axios'
+
+export const http = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+  timeout: 10_000,
+})
+
+export interface HealthResponse {
+  code: number
+  message: string
+  data: {
+    status: string
+    service: string
+  }
+}
+
+export function getHealth() {
+  return http.get<HealthResponse>('/health')
+}
