@@ -5,6 +5,10 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+    { path: '/activities', name: 'activities', component: () => import('../views/activity/ActivityListView.vue') },
+    { path: '/activity/:id', name: 'activity-detail', component: () => import('../views/activity/ActivityDetailView.vue') },
+    { path: '/organizer/activities', name: 'organizer-activities', component: () => import('../views/organizer/OrganizerActivitiesView.vue'), meta: { roles: ['ORGANIZER', 'ADMIN'] } },
+    { path: '/admin/review', name: 'admin-review', component: () => import('../views/admin/AdminReviewView.vue'), meta: { roles: ['ADMIN'] } },
     { path: '/login', name: 'login', component: () => import('../views/auth/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/auth/RegisterView.vue'), meta: { guestOnly: true } },
   ],
@@ -13,6 +17,10 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.guestOnly && auth.isAuthenticated) return { name: 'home' }
+  const roles = to.meta.roles as string[] | undefined
+  if (roles && (!auth.isAuthenticated || !auth.user || !roles.includes(auth.user.role))) {
+    return auth.isAuthenticated ? { name: 'home' } : { name: 'login', query: { redirect: to.fullPath } }
+  }
   return true
 })
 

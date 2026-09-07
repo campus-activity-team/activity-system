@@ -47,7 +47,9 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, exception) -> writeError(response, 403, "没有权限执行此操作"))
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health", "/api/auth/**", "/actuator/health", "/error").permitAll()
+                        .requestMatchers("/api/health", "/actuator/health", "/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/activities", "/api/activities/*").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

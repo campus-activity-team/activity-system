@@ -23,6 +23,11 @@ async function logout() {
         <span class="brand-mark">A</span>
         <span>活动报名与签到系统</span>
       </router-link>
+      <nav class="main-nav">
+        <router-link to="/activities">活动</router-link>
+        <router-link v-if="auth.user?.role === 'ORGANIZER' || auth.user?.role === 'ADMIN'" to="/organizer/activities">我的活动</router-link>
+        <router-link v-if="auth.user?.role === 'ADMIN'" to="/admin/review">审核管理</router-link>
+      </nav>
       <div class="header-actions">
         <template v-if="auth.isAuthenticated">
           <span class="user-greeting">{{ auth.user?.name }}</span>
