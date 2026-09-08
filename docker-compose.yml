@@ -49,6 +49,14 @@ services:
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-PT2H}
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
+      AI_CONNECT_TIMEOUT: ${AI_CONNECT_TIMEOUT:-PT5S}
+      AI_READ_TIMEOUT: ${AI_READ_TIMEOUT:-PT30S}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-1200}
+      AI_REQUESTS_PER_MINUTE: ${AI_REQUESTS_PER_MINUTE:-5}
     ports:
       - "8080:8080"
     depends_on:

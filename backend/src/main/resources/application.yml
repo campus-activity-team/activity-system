@@ -41,3 +41,14 @@ security:
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-to-at-least-32-bytes}
     expiration: ${JWT_EXPIRATION:PT2H}
+
+ai:
+  deepseek:
+    enabled: ${AI_ENABLED:false}
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:deepseek-chat}
+    connect-timeout: ${AI_CONNECT_TIMEOUT:PT5S}
+    read-timeout: ${AI_READ_TIMEOUT:PT30S}
+    max-tokens: ${AI_MAX_TOKENS:1200}
+    requests-per-minute: ${AI_REQUESTS_PER_MINUTE:5}

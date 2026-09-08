@@ -200,6 +200,13 @@ body {
   margin: 22px 0;
 }
 
+.form-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .form-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -235,6 +242,36 @@ body {
   white-space: pre-wrap;
   line-height: 1.8;
   color: #4b5563;
+}
+
+.ai-form {
+  margin-top: 18px;
+}
+
+.ai-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+.ai-result {
+  margin-top: 12px;
+}
+
+.ai-result p,
+.ai-result li {
+  line-height: 1.7;
+}
+
+.ai-result small {
+  color: #6b7280;
+}
+
+.ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
 }
 
 @media (max-width: 560px) {

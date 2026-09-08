@@ -1,6 +1,7 @@
 package com.example.activity.exception;
 
 import com.example.activity.common.ApiResponse;
+import com.example.activity.ai.AiServiceException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,11 @@ public class GlobalExceptionHandler {
         return response(409, "数据已存在或违反唯一约束", HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(AiServiceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAi(AiServiceException exception) {
+        return response(exception.getCode(), exception.getMessage(), statusFor(exception.getCode()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception exception, HttpServletRequest request) {
         return response(500, "服务暂时不可用，请稍后重试", HttpStatus.INTERNAL_SERVER_ERROR);
@@ -56,6 +62,9 @@ public class GlobalExceptionHandler {
             case 403 -> HttpStatus.FORBIDDEN;
             case 404 -> HttpStatus.NOT_FOUND;
             case 409 -> HttpStatus.CONFLICT;
+            case 429 -> HttpStatus.TOO_MANY_REQUESTS;
+            case 502 -> HttpStatus.BAD_GATEWAY;
+            case 503 -> HttpStatus.SERVICE_UNAVAILABLE;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }
