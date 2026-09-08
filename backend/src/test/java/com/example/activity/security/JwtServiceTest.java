@@ -2,6 +2,7 @@ package com.example.activity.security;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,7 +16,7 @@ class JwtServiceTest {
 
     @Test
     void generatesAndValidatesToken() {
-        User user = User.withUsername("student")
+        UserDetails user = User.withUsername("student")
                 .password("ignored")
                 .roles("USER")
                 .build();
