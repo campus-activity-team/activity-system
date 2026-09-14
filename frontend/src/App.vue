@@ -25,6 +25,7 @@ async function logout() {
       </router-link>
       <nav class="main-nav">
         <router-link to="/activities">活动</router-link>
+        <router-link v-if="auth.isAuthenticated" to="/my-registrations">我的报名</router-link>
         <router-link v-if="auth.user?.role === 'ORGANIZER' || auth.user?.role === 'ADMIN'" to="/organizer/activities">我的活动</router-link>
         <router-link v-if="auth.user?.role === 'ADMIN'" to="/admin/review">审核管理</router-link>
       </nav>
