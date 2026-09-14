@@ -102,7 +102,7 @@ public class CheckinService {
         }
         Attendance existing = attendanceMapper.selectByActivityAndUser(activity.getId(), user.getId());
         if (existing != null && existing.getStatus() == AttendanceStatus.SUCCESS) {
-            throw new BusinessException(409, "你已经签到过了");
+            return toView(existing, activity, user);
         }
 
         Attendance attendance = existing == null ? new Attendance() : existing;

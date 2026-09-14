@@ -39,15 +39,15 @@ docker compose up -d --build
 - MySQL：localhost:3306，数据库 `activity_system`
 - Redis：localhost:6379
 
-手机扫码（局域网测试）：将 `.env` 中的 `VITE_PUBLIC_APP_URL` 设置为电脑局域网地址（例如 `http://192.168.1.20:5173`），并重新构建前端：
+手机扫码（局域网测试）：管理者可在动态二维码区域直接填写电脑局域网地址，例如 `http://192.168.1.20:5173`。设置会保存在当前浏览器，系统会拒绝生成 `localhost` 二维码。也可以在 `.env` 中通过 `VITE_PUBLIC_APP_URL` 配置默认值，然后重新构建前端：
 
 ```bash
 docker compose up -d --build frontend
 ```
 
-手机和电脑连接同一 Wi-Fi 后，用该局域网地址打开系统并生成二维码。不要从 `localhost` 页面生成二维码，因为手机上的 `localhost` 指向手机本身。若使用 Vite 本地开发，请在 `frontend/.env.local` 写入 `VITE_PUBLIC_APP_URL=http://电脑局域网IP:5173`，再执行 `npm run dev -- --host 0.0.0.0`。
+手机和电脑连接同一 Wi-Fi 后，先在手机浏览器打开该局域网地址确认能够访问，再生成二维码。若打不开，请检查系统防火墙是否允许 TCP 5173，以及 Wi-Fi 是否开启了客户端隔离。若使用 Vite 本地开发，请执行 `npm run dev -- --host 0.0.0.0`。
 
-投入实际使用时，建议使用公网或校园网域名 + HTTPS，通过 Nginx/网关反向代理到前端容器；将 `VITE_PUBLIC_APP_URL` 设置为该 HTTPS 地址，配置 DNS、防火墙和有效证书，并替换生产数据库密码、JWT 密钥，使用 `prod` Profile，关闭开发演示数据初始化。
+投入实际使用时，建议使用公网或校园网域名 + HTTPS，通过 Nginx/网关反向代理到前端容器；将手机访问地址或 `VITE_PUBLIC_APP_URL` 设置为该 HTTPS 地址，配置 DNS、防火墙和有效证书，并替换生产数据库密码、JWT 密钥，使用 `prod` Profile，关闭开发演示数据初始化。Compose 仅向局域网开放前端 `5173`，后端、MySQL 和 Redis 端口只绑定本机。
 
 停止服务：
 

@@ -34,10 +34,18 @@ const detailAttendances = ref<Attendance[]>([])
 const detailLoading = ref(false)
 const checkinToken = ref<CheckinToken | null>(null)
 const checkinQrCode = ref('')
-const qrAddressWarning = ref(false)
 const tokenCountdown = ref(0)
 let tokenTimer: ReturnType<typeof setInterval> | undefined
-const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim()
+let attendanceSyncTimer: ReturnType<typeof setInterval> | undefined
+const attendanceSyncedAt = ref('')
+const publicUrlStorageKey = 'activity-system-public-url'
+const configuredPublicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim() ?? ''
+const currentOrigin = window.location.origin
+const checkinBaseUrl = ref(
+  localStorage.getItem(publicUrlStorageKey)?.trim()
+    || configuredPublicAppUrl
+    || (isLocalOnlyHostname(window.location.hostname) ? '' : currentOrigin),
+)
 const aiForm = reactive<ActivityCopyRequest>({
   topic: '',
   activityType: '',
@@ -145,29 +153,65 @@ async function startActivityNow(id: number) {
 async function openActivityDetail(activity: Activity) {
   detailActivity.value = activity
   detailDialogVisible.value = true
-  detailLoading.value = true
+  await loadActivityDetailData(true)
+  if (attendanceSyncTimer) clearInterval(attendanceSyncTimer)
+  attendanceSyncTimer = setInterval(() => { void loadActivityDetailData(false) }, 3000)
+}
+
+async function loadActivityDetailData(showLoading: boolean) {
+  if (!detailActivity.value) return
+  if (showLoading) detailLoading.value = true
   try {
     const [registrationResponse, attendanceResponse] = await Promise.all([
-      getActivityRegistrations(activity.id),
-      getActivityAttendances(activity.id),
+      getActivityRegistrations(detailActivity.value.id),
+      getActivityAttendances(detailActivity.value.id),
     ])
     detailRegistrations.value = registrationResponse.data.data
     detailAttendances.value = attendanceResponse.data.data
+    attendanceSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message ?? '活动详情加载失败')
+    if (showLoading) ElMessage.error(error?.response?.data?.message ?? '活动详情加载失败')
   } finally {
-    detailLoading.value = false
+    if (showLoading) detailLoading.value = false
+  }
+}
+
+function isLocalOnlyHostname(hostname: string) {
+  return ['localhost', '127.0.0.1', '0.0.0.0', '::1', '::'].includes(hostname.toLowerCase())
+}
+
+function resolveCheckinBaseUrl() {
+  const value = checkinBaseUrl.value.trim()
+  if (!value) {
+    ElMessage.warning('请先填写手机能够访问的系统地址')
+    return null
+  }
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      ElMessage.error('手机访问地址必须以 http:// 或 https:// 开头')
+      return null
+    }
+    if (isLocalOnlyHostname(url.hostname)) {
+      ElMessage.error('不能使用本机地址，请填写局域网 IP 或 HTTPS 域名')
+      return null
+    }
+    return url.origin
+  } catch {
+    ElMessage.error('手机访问地址格式不正确')
+    return null
   }
 }
 
 async function refreshCheckinToken() {
   if (!detailActivity.value || detailActivity.value.status !== 'ONGOING') return
+  const qrBaseUrl = resolveCheckinBaseUrl()
+  if (!qrBaseUrl) return
   try {
+    localStorage.setItem(publicUrlStorageKey, qrBaseUrl)
+    checkinBaseUrl.value = qrBaseUrl
     checkinToken.value = (await issueCheckinToken(detailActivity.value.id)).data.data
-    const qrBaseUrl = publicAppUrl || window.location.origin
-    const qrBase = new URL(qrBaseUrl)
-    qrAddressWarning.value = ['localhost', '127.0.0.1', '::1'].includes(qrBase.hostname)
-    const checkinUrl = new URL('/checkin', qrBase)
+    const checkinUrl = new URL('/checkin', qrBaseUrl)
     checkinUrl.searchParams.set('token', checkinToken.value.token)
     checkinUrl.searchParams.set('activityId', String(detailActivity.value.id))
     checkinQrCode.value = await QRCode.toDataURL(checkinUrl.toString(), {
@@ -190,12 +234,16 @@ function closeDetailDialog() {
   detailDialogVisible.value = false
   checkinToken.value = null
   checkinQrCode.value = ''
-  qrAddressWarning.value = false
   tokenCountdown.value = 0
   if (tokenTimer) {
     clearInterval(tokenTimer)
     tokenTimer = undefined
   }
+  if (attendanceSyncTimer) {
+    clearInterval(attendanceSyncTimer)
+    attendanceSyncTimer = undefined
+  }
+  attendanceSyncedAt.value = ''
 }
 
 function openAiAssistant() {
@@ -246,6 +294,7 @@ function applyAiResult() {
 onMounted(loadActivities)
 onUnmounted(() => {
   if (tokenTimer) clearInterval(tokenTimer)
+  if (attendanceSyncTimer) clearInterval(attendanceSyncTimer)
 })
 </script>
 
@@ -332,18 +381,25 @@ onUnmounted(() => {
         <p class="detail-description">{{ detailActivity.description }}</p>
         <div v-if="detailActivity.status === 'ONGOING'" class="checkin-token-box">
           <div class="page-heading"><div><h3>动态签到二维码</h3><p>二维码每 60 秒自动刷新，参会者扫码后会自动打开签到页面并完成签到。</p></div><el-button type="primary" @click="refreshCheckinToken">{{ checkinQrCode ? '立即刷新' : '生成二维码' }}</el-button></div>
+          <div class="checkin-network-config">
+            <el-input v-model="checkinBaseUrl" clearable placeholder="例如：http://192.168.1.20:5173 或 https://activity.example.edu">
+              <template #prepend>手机访问地址</template>
+            </el-input>
+            <small>局域网演示填写电脑的局域网 IP；正式使用填写已配置 HTTPS 的域名。该设置只保存在当前浏览器。</small>
+          </div>
           <div v-if="checkinQrCode" class="checkin-qr-content">
             <img :src="checkinQrCode" alt="活动动态签到二维码" class="checkin-qr-image" />
             <div class="checkin-qr-meta">
               <el-tag type="warning">{{ tokenCountdown }} 秒后刷新</el-tag>
-              <p>请使用手机相机或扫码工具扫描。手机需要能够访问当前系统地址。</p>
+              <p>二维码访问：{{ checkinBaseUrl }}</p>
+              <p>请先用手机浏览器打开该地址确认网络连通，再扫描二维码。</p>
             </div>
           </div>
-          <el-alert v-if="qrAddressWarning" title="当前二维码使用 localhost，仅本机可访问" description="请在 .env 设置 VITE_PUBLIC_APP_URL 为电脑局域网 IP 或正式域名，然后重新构建前端。" type="warning" show-icon :closable="false" />
+          <el-alert v-if="!checkinBaseUrl.trim()" title="需要配置手机访问地址" description="系统不会生成 localhost 二维码，请填写局域网 IP 或正式 HTTPS 域名。" type="warning" show-icon :closable="false" />
           <el-empty v-if="!checkinQrCode" description="点击生成本场签到二维码" :image-size="80" />
         </div>
         <el-tabs>
-          <el-tab-pane label="报名名单">
+          <el-tab-pane :label="`报名名单（${detailRegistrations.length}）`">
             <el-empty v-if="detailRegistrations.length === 0" description="暂无报名" />
             <el-table v-else :data="detailRegistrations" stripe>
               <el-table-column prop="name" label="姓名" width="120" />
@@ -353,7 +409,11 @@ onUnmounted(() => {
               <el-table-column prop="checkedIn" label="签到" width="90"><template #default="{ row }">{{ row.checkedIn ? '已签到' : '未签到' }}</template></el-table-column>
             </el-table>
           </el-tab-pane>
-          <el-tab-pane label="签到记录">
+          <el-tab-pane :label="`签到记录（${detailAttendances.length}）`">
+            <div class="attendance-sync-bar">
+              <small>每 3 秒自动同步{{ attendanceSyncedAt ? ` · 最近同步 ${attendanceSyncedAt}` : '' }}</small>
+              <el-button link type="primary" @click="loadActivityDetailData(false)">立即刷新</el-button>
+            </div>
             <el-empty v-if="detailAttendances.length === 0" description="暂无签到" />
             <el-table v-else :data="detailAttendances" stripe>
               <el-table-column prop="name" label="姓名" width="120" />

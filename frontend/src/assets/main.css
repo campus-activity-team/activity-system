@@ -259,6 +259,17 @@ body {
   padding: 10px 0 4px;
 }
 
+.checkin-network-config {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.checkin-network-config small {
+  color: #64748b;
+  line-height: 1.6;
+}
+
 .checkin-qr-image {
   width: 280px;
   height: 280px;
@@ -276,6 +287,19 @@ body {
 
 .checkin-card {
   width: min(680px, 100%);
+}
+
+.checkin-actions {
+  justify-content: center;
+}
+
+.attendance-sync-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #64748b;
 }
 
 .ai-form {

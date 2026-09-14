@@ -66,8 +66,8 @@
 - `GET /api/organizer/activities/{activityId}/registrations`：组织者或管理员查看报名名单
 - `GET /api/organizer/activities/{activityId}/attendances`：组织者或管理员查看签到记录
 - `POST /api/organizer/activities/{activityId}/checkin-token`：为进行中活动生成 60 秒有效签到令牌，前端将其编码为动态二维码
-- `POST /api/checkins`：已报名用户扫码后使用二维码中的短期令牌签到；重复签到或过期令牌会返回业务错误
+- `POST /api/checkins`：已报名用户扫码后使用二维码中的短期令牌签到；重复提交会幂等返回已有签到结果，过期令牌会返回业务错误
 
-组织者端不会直接要求参会者手动输入令牌。二维码链接会打开 `/checkin` 页面，登录后自动提交签到；本地演示时请使用手机可访问的局域网前端地址生成二维码，不要使用手机无法访问的 `localhost` 地址。
+组织者端不会直接要求参会者手动输入令牌。二维码链接会打开 `/checkin` 页面，登录后自动提交并停留展示“已完成签到”；组织者和管理员页面每 3 秒同步最新签到记录。本地演示时请使用手机可访问的局域网前端地址生成二维码，不要使用手机无法访问的 `localhost` 地址。
 
 错误响应使用对应 HTTP 状态码，并保持相同 JSON 结构。反馈业务接口仍将在后续阶段添加。
