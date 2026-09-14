@@ -61,13 +61,12 @@ public class CheckinService {
         Activity activity = requiredActivity(activityId);
         ensureCanManage(activity, authentication);
         LocalDateTime now = LocalDateTime.now();
-        if (activity.getStatus() == ActivityStatus.PUBLISHED
-                && !now.isBefore(activity.getStartTime())
-                && now.isBefore(activity.getEndTime())) {
-            activity.setStatus(ActivityStatus.ONGOING);
+        ActivityStatus resolvedStatus = ActivityStatusResolver.resolve(activity, now);
+        if (resolvedStatus != activity.getStatus()) {
+            activity.setStatus(resolvedStatus);
             activityMapper.updateById(activity);
         }
-        if (activity.getStatus() != ActivityStatus.ONGOING) {
+        if (resolvedStatus != ActivityStatus.ONGOING) {
             throw new BusinessException(409, "只有进行中的活动可以开启签到");
         }
 
@@ -89,7 +88,12 @@ public class CheckinService {
         }
 
         Activity activity = requiredActivity(token.getActivityId());
-        if (activity.getStatus() != ActivityStatus.ONGOING) {
+        ActivityStatus resolvedStatus = ActivityStatusResolver.resolve(activity, LocalDateTime.now());
+        if (resolvedStatus != activity.getStatus()) {
+            activity.setStatus(resolvedStatus);
+            activityMapper.updateById(activity);
+        }
+        if (resolvedStatus != ActivityStatus.ONGOING) {
             throw new BusinessException(409, "当前不在活动签到时间内");
         }
         Registration registration = registrationMapper.selectByActivityAndUser(activity.getId(), user.getId());

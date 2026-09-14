@@ -29,7 +29,7 @@ onMounted(checkBackend)
     <p>Phase 1-4 已完成，报名与签到流程已接入。当前登录用户：{{ auth.user?.name }}（{{ auth.user?.role }}）</p>
     <el-descriptions :column="1" border>
       <el-descriptions-item label="后端状态">{{ backendStatus }}</el-descriptions-item>
-      <el-descriptions-item label="当前阶段">活动管理、报名、60 秒签到令牌和签到记录</el-descriptions-item>
+      <el-descriptions-item label="当前阶段">活动管理、报名、动态二维码签到和签到记录</el-descriptions-item>
     </el-descriptions>
     <div class="actions">
       <el-button type="primary" @click="checkBackend">重新检查后端</el-button>

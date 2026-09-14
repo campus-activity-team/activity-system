@@ -22,6 +22,8 @@ import java.time.LocalDateTime;
 @Profile("dev")
 public class DevDataInitializer implements CommandLineRunner {
 
+    private static final String ONGOING_ACTIVITY_TITLE = "【测试】现场签到演示活动";
+
     private final UserMapper userMapper;
     private final ActivityMapper activityMapper;
     private final RegistrationMapper registrationMapper;
@@ -73,6 +75,13 @@ public class DevDataInitializer implements CommandLineRunner {
     private void seedActivities(Long organizerId) {
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
 
+        renameLegacyActivityTitle(organizerId, "【测试】学生社团招新说明会（草稿）", "【测试】学生社团招新说明会");
+        renameLegacyActivityTitle(organizerId, "【测试】科研经验分享会（待审核）", "【测试】科研经验分享会");
+        renameLegacyActivityTitle(organizerId, "【测试】志愿服务培训（已驳回）", "【测试】志愿服务培训");
+        renameLegacyActivityTitle(organizerId, "【测试】校园摄影采风（待发布）", "【测试】校园摄影采风");
+        renameLegacyActivityTitle(organizerId, "【测试】往期演示活动（已结束）", "【测试】往期演示活动");
+        renameLegacyActivityTitle(organizerId, "【测试】现场签到演示活动（进行中）", ONGOING_ACTIVITY_TITLE);
+
         createActivityIfMissing(
                 organizerId,
                 "【测试】校园 AI 应用入门讲座",
@@ -84,7 +93,7 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】学生社团招新说明会（草稿）",
+                "【测试】学生社团招新说明会",
                 "介绍本学期社团招新安排、报名方式和优秀社团活动案例。",
                 "大学生活动中心报告厅",
                 now.plusDays(1), now.plusDays(12),
@@ -93,7 +102,7 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】科研经验分享会（待审核）",
+                "【测试】科研经验分享会",
                 "邀请高年级学生分享科研入门、文献阅读和项目实践经验。",
                 "图书馆学术报告厅",
                 now.plusDays(1), now.plusDays(19),
@@ -102,7 +111,7 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】志愿服务培训（已驳回）",
+                "【测试】志愿服务培训",
                 "面向新志愿者开展服务礼仪、安全须知和现场协作培训。",
                 "学生服务中心 201",
                 now.plusDays(2), now.plusDays(25),
@@ -111,7 +120,7 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】校园摄影采风（待发布）",
+                "【测试】校园摄影采风",
                 "组织摄影爱好者进行校园主题采风，活动结束后开展作品交流。",
                 "东校区南门集合",
                 now.plusDays(3), now.plusDays(32),
@@ -120,7 +129,7 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】往期演示活动（已结束）",
+                "【测试】往期演示活动",
                 "用于验证已结束活动在公开活动列表中的展示。",
                 "大学生活动中心 B201",
                 now.minusDays(30), now.minusDays(15),
@@ -129,13 +138,26 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】现场签到演示活动（进行中）",
+                ONGOING_ACTIVITY_TITLE,
                 "用于测试进行中状态、报名名单和 60 秒签到令牌。",
                 "大学生活动中心 C102",
                 now.minusDays(2), now.plusHours(2),
                 now.minusHours(1), now.plusHours(2),
                 30, ActivityStatus.ONGOING, null, false, null
         );
+    }
+
+    private void renameLegacyActivityTitle(Long organizerId, String legacyTitle, String currentTitle) {
+        Activity legacyActivity = activityMapper.selectOne(Wrappers.<Activity>lambdaQuery()
+                .eq(Activity::getOrganizerId, organizerId)
+                .eq(Activity::getTitle, legacyTitle));
+        if (legacyActivity == null || activityMapper.selectCount(Wrappers.<Activity>lambdaQuery()
+                .eq(Activity::getOrganizerId, organizerId)
+                .eq(Activity::getTitle, currentTitle)) > 0) {
+            return;
+        }
+        legacyActivity.setTitle(currentTitle);
+        activityMapper.updateById(legacyActivity);
     }
 
     private void createActivityIfMissing(
@@ -179,7 +201,7 @@ public class DevDataInitializer implements CommandLineRunner {
 
     private void seedOngoingRegistrations() {
         Activity activity = activityMapper.selectOne(Wrappers.<Activity>lambdaQuery()
-                .eq(Activity::getTitle, "【测试】现场签到演示活动（进行中）"));
+                .eq(Activity::getTitle, ONGOING_ACTIVITY_TITLE));
         if (activity == null) {
             return;
         }

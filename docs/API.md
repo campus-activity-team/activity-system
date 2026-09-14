@@ -45,13 +45,17 @@
 - `PUT /api/activities/{id}`：编辑草稿或已驳回活动
 - `DELETE /api/activities/{id}`：删除草稿或已驳回活动
 - `POST /api/activities/{id}/submit`：提交管理员审核
+- `POST /api/activities/{id}/start`：组织者或管理员手动开启已发布活动，立即进入 `ONGOING` 状态
 - `GET /api/admin/reviews`：管理员查看待审核活动
 - `POST /api/admin/activities/{id}/approve`：管理员通过审核
 - `POST /api/admin/activities/{id}/reject`：管理员驳回活动
 - `POST /api/admin/activities/{id}/publish`：管理员发布已通过活动
 - `POST /api/admin/activities/{id}/unpublish`：管理员下架已发布或进行中活动
 
-活动状态会由后台定时任务根据开始和结束时间自动从 `PUBLISHED` 推进至 `ONGOING` 或 `ENDED`。
+活动状态会由后台定时任务根据开始和结束时间自动从 `PUBLISHED` 推进至 `ONGOING` 或 `ENDED`；公开、管理、报名和签到接口读取时也会即时校正过期状态，避免定时任务间隔造成显示延迟。手动开启后的 `ONGOING` 活动会保持进行中，直到活动结束时间。
+组织者或管理员也可以手动开启尚未结束的已发布活动，便于现场提前开始签到。
+
+公开活动只返回 `PUBLISHED`、`ONGOING`、`ENDED`，草稿、审核中、已驳回、待发布和已取消活动不会出现在公开列表或详情中。前端会根据报名起止时间显示“报名未开始”“报名中”或“报名已截止”，不会将所有已发布活动都显示为报名中。
 
 ## Phase 4 报名与签到接口
 
@@ -61,7 +65,9 @@
 - `DELETE /api/registrations/activities/{activityId}`：活动开始前取消报名
 - `GET /api/organizer/activities/{activityId}/registrations`：组织者或管理员查看报名名单
 - `GET /api/organizer/activities/{activityId}/attendances`：组织者或管理员查看签到记录
-- `POST /api/organizer/activities/{activityId}/checkin-token`：为进行中活动生成 60 秒有效签到令牌
-- `POST /api/checkins`：已报名用户使用当前令牌签到；重复签到或过期令牌会返回业务错误
+- `POST /api/organizer/activities/{activityId}/checkin-token`：为进行中活动生成 60 秒有效签到令牌，前端将其编码为动态二维码
+- `POST /api/checkins`：已报名用户扫码后使用二维码中的短期令牌签到；重复签到或过期令牌会返回业务错误
+
+组织者端不会直接要求参会者手动输入令牌。二维码链接会打开 `/checkin` 页面，登录后自动提交签到；本地演示时请使用手机可访问的局域网前端地址生成二维码，不要使用手机无法访问的 `localhost` 地址。
 
 错误响应使用对应 HTTP 状态码，并保持相同 JSON 结构。反馈业务接口仍将在后续阶段添加。

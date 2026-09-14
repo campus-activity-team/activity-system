@@ -74,4 +74,10 @@ public class ActivityController {
     public ApiResponse<ActivityView> submit(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(activityService.submit(id, authentication));
     }
+
+    @PostMapping("/{id}/start")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    public ApiResponse<ActivityView> start(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(activityService.start(id, authentication));
+    }
 }

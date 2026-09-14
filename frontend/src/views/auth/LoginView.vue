@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const submitting = ref(false)
 const form = reactive({ username: '', password: '' })
@@ -14,7 +15,10 @@ async function submit() {
   try {
     await auth.login(form)
     ElMessage.success('登录成功')
-    await router.push({ name: 'home' })
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+      ? route.query.redirect
+      : { name: 'home' }
+    await router.push(redirect)
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message ?? '登录失败，请检查用户名和密码')
   } finally {

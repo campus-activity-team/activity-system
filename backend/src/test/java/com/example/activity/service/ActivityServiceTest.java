@@ -113,6 +113,22 @@ class ActivityServiceTest {
         assertEquals(404, exception.getCode());
     }
 
+    @Test
+    void organizerCanStartPublishedActivityBeforeScheduledTime() {
+        Activity activity = new Activity();
+        activity.setId(22L);
+        activity.setOrganizerId(7L);
+        activity.setStatus(ActivityStatus.PUBLISHED);
+        activity.setStartTime(LocalDateTime.now().plusDays(1));
+        activity.setEndTime(LocalDateTime.now().plusDays(1).plusHours(2));
+        when(activityMapper.selectById(22L)).thenReturn(activity);
+
+        var result = activityService.start(22L, organizerAuthentication);
+
+        assertEquals(ActivityStatus.ONGOING, result.status());
+        verify(activityMapper).updateById(activity);
+    }
+
     private ActivityRequest validRequest() {
         LocalDateTime now = LocalDateTime.now();
         return new ActivityRequest(

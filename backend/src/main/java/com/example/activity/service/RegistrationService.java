@@ -131,7 +131,12 @@ public class RegistrationService {
     }
 
     private void ensureRegistrationOpen(Activity activity) {
-        if (activity.getStatus() != ActivityStatus.PUBLISHED && activity.getStatus() != ActivityStatus.ONGOING) {
+        ActivityStatus resolvedStatus = ActivityStatusResolver.resolve(activity, LocalDateTime.now());
+        if (resolvedStatus != activity.getStatus()) {
+            activity.setStatus(resolvedStatus);
+            activityMapper.updateById(activity);
+        }
+        if (resolvedStatus != ActivityStatus.PUBLISHED && resolvedStatus != ActivityStatus.ONGOING) {
             throw new BusinessException(409, "当前活动暂未开放报名");
         }
         LocalDateTime now = LocalDateTime.now();

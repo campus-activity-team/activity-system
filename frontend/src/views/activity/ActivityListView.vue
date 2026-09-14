@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { getActivities } from '../../api/activity'
 import type { Activity } from '../../types/activity'
+import { formatActivityTime, getActivityDisplay } from '../../utils/activity'
 
 const keyword = ref('')
 const loading = ref(false)
 const activities = ref<Activity[]>([])
 const router = useRouter()
-
-const statusLabel: Record<string, string> = {
-  PUBLISHED: '报名中',
-  ONGOING: '进行中',
-  ENDED: '已结束',
-}
+const now = ref(new Date())
+let clockTimer: ReturnType<typeof setInterval> | undefined
 
 async function loadActivities() {
   loading.value = true
@@ -28,11 +25,13 @@ async function loadActivities() {
   }
 }
 
-function formatTime(value: string) {
-  return value ? value.replace('T', ' ').slice(0, 16) : '-'
-}
-
-onMounted(loadActivities)
+onMounted(() => {
+  loadActivities()
+  clockTimer = setInterval(() => { now.value = new Date() }, 30_000)
+})
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
+})
 </script>
 
 <template>
@@ -54,10 +53,11 @@ onMounted(loadActivities)
         <div class="activity-content">
           <div class="activity-title-row">
             <h3>{{ activity.title }}</h3>
-            <el-tag type="success">{{ statusLabel[activity.status] ?? activity.status }}</el-tag>
+            <el-tag :type="getActivityDisplay(activity, now).type">{{ getActivityDisplay(activity, now).label }}</el-tag>
           </div>
           <p>{{ activity.description }}</p>
-          <small>{{ formatTime(activity.startTime) }} · {{ activity.location }}</small>
+          <small>{{ formatActivityTime(activity.startTime) }} · {{ activity.location }}</small>
+          <small>报名：{{ formatActivityTime(activity.registrationStartTime) }} 至 {{ formatActivityTime(activity.registrationEndTime) }}</small>
           <small>剩余名额：{{ activity.remainingCapacity }} / {{ activity.capacity }}</small>
         </div>
       </el-card>

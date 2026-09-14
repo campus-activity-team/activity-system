@@ -244,6 +244,40 @@ body {
   color: #4b5563;
 }
 
+.checkin-token-box {
+  padding: 20px;
+  margin: 24px 0;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.checkin-qr-content {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 0 4px;
+}
+
+.checkin-qr-image {
+  width: 280px;
+  height: 280px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.checkin-qr-meta {
+  max-width: 320px;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.checkin-card {
+  width: min(680px, 100%);
+}
+
 .ai-form {
   margin-top: 18px;
 }
@@ -295,5 +329,15 @@ body {
   .detail-cover {
     width: 100%;
     flex-basis: auto;
+  }
+
+  .checkin-qr-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .checkin-qr-image {
+    width: min(280px, 100%);
+    height: auto;
   }
 }

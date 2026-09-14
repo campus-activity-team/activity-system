@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createActivity, deleteActivity, getMyActivities, submitActivity, updateActivity } from '../../api/activity'
+import QRCode from 'qrcode'
+import { createActivity, deleteActivity, getMyActivities, startActivity, submitActivity, updateActivity } from '../../api/activity'
 import { generateActivityCopy } from '../../api/ai'
 import { getActivityAttendances, getActivityRegistrations, issueCheckinToken } from '../../api/registration'
 import type { Activity, ActivityPayload } from '../../types/activity'
@@ -32,8 +33,11 @@ const detailRegistrations = ref<Registration[]>([])
 const detailAttendances = ref<Attendance[]>([])
 const detailLoading = ref(false)
 const checkinToken = ref<CheckinToken | null>(null)
+const checkinQrCode = ref('')
+const qrAddressWarning = ref(false)
 const tokenCountdown = ref(0)
 let tokenTimer: ReturnType<typeof setInterval> | undefined
+const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim()
 const aiForm = reactive<ActivityCopyRequest>({
   topic: '',
   activityType: '',
@@ -127,6 +131,17 @@ async function submitForReview(id: number) {
   }
 }
 
+async function startActivityNow(id: number) {
+  try {
+    await ElMessageBox.confirm('立即开启活动并进入签到状态？开启后将允许参会者签到。', '手动开启活动', { type: 'warning' })
+    await startActivity(id)
+    ElMessage.success('活动已开启，现在可以生成签到二维码')
+    await loadActivities()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '开启活动失败')
+  }
+}
+
 async function openActivityDetail(activity: Activity) {
   detailActivity.value = activity
   detailDialogVisible.value = true
@@ -149,6 +164,17 @@ async function refreshCheckinToken() {
   if (!detailActivity.value || detailActivity.value.status !== 'ONGOING') return
   try {
     checkinToken.value = (await issueCheckinToken(detailActivity.value.id)).data.data
+    const qrBaseUrl = publicAppUrl || window.location.origin
+    const qrBase = new URL(qrBaseUrl)
+    qrAddressWarning.value = ['localhost', '127.0.0.1', '::1'].includes(qrBase.hostname)
+    const checkinUrl = new URL('/checkin', qrBase)
+    checkinUrl.searchParams.set('token', checkinToken.value.token)
+    checkinUrl.searchParams.set('activityId', String(detailActivity.value.id))
+    checkinQrCode.value = await QRCode.toDataURL(checkinUrl.toString(), {
+      width: 280,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+    })
     tokenCountdown.value = checkinToken.value.expiresInSeconds
     if (tokenTimer) clearInterval(tokenTimer)
     tokenTimer = setInterval(() => {
@@ -163,6 +189,8 @@ async function refreshCheckinToken() {
 function closeDetailDialog() {
   detailDialogVisible.value = false
   checkinToken.value = null
+  checkinQrCode.value = ''
+  qrAddressWarning.value = false
   tokenCountdown.value = 0
   if (tokenTimer) {
     clearInterval(tokenTimer)
@@ -255,7 +283,7 @@ onUnmounted(() => {
       <el-table-column prop="title" label="活动名称" min-width="180" />
       <el-table-column prop="status" label="状态" width="110"><template #default="{ row }"><el-tag>{{ statusLabel[row.status] ?? row.status }}</el-tag></template></el-table-column>
       <el-table-column prop="capacity" label="容量" width="90" />
-      <el-table-column label="操作" min-width="300"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="360"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'PUBLISHED'" link type="success" @click="startActivityNow(row.id)">手动开启</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
     </el-table>
     <el-dialog v-model="aiDialogVisible" title="DeepSeek AI 活动文案助手" width="min(720px, 92vw)" destroy-on-close>
       <el-alert title="AI 生成内容仅作为草稿，不会自动保存或提交审核，请在应用后人工检查。" type="info" :closable="false" show-icon />
@@ -303,10 +331,16 @@ onUnmounted(() => {
         <h3>活动介绍</h3>
         <p class="detail-description">{{ detailActivity.description }}</p>
         <div v-if="detailActivity.status === 'ONGOING'" class="checkin-token-box">
-          <div class="page-heading"><div><h3>签到令牌</h3><p>令牌每 60 秒自动刷新，参会者可将当前令牌粘贴到活动详情页完成签到。</p></div><el-button type="primary" @click="refreshCheckinToken">立即刷新</el-button></div>
-          <el-input :model-value="checkinToken?.token ?? '点击刷新生成令牌'" readonly>
-            <template #append>{{ tokenCountdown > 0 ? `${tokenCountdown}s` : '-' }}</template>
-          </el-input>
+          <div class="page-heading"><div><h3>动态签到二维码</h3><p>二维码每 60 秒自动刷新，参会者扫码后会自动打开签到页面并完成签到。</p></div><el-button type="primary" @click="refreshCheckinToken">{{ checkinQrCode ? '立即刷新' : '生成二维码' }}</el-button></div>
+          <div v-if="checkinQrCode" class="checkin-qr-content">
+            <img :src="checkinQrCode" alt="活动动态签到二维码" class="checkin-qr-image" />
+            <div class="checkin-qr-meta">
+              <el-tag type="warning">{{ tokenCountdown }} 秒后刷新</el-tag>
+              <p>请使用手机相机或扫码工具扫描。手机需要能够访问当前系统地址。</p>
+            </div>
+          </div>
+          <el-alert v-if="qrAddressWarning" title="当前二维码使用 localhost，仅本机可访问" description="请在 .env 设置 VITE_PUBLIC_APP_URL 为电脑局域网 IP 或正式域名，然后重新构建前端。" type="warning" show-icon :closable="false" />
+          <el-empty v-if="!checkinQrCode" description="点击生成本场签到二维码" :image-size="80" />
         </div>
         <el-tabs>
           <el-tab-pane label="报名名单">

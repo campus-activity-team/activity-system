@@ -75,56 +75,65 @@ public class ActivityService {
         return ActivityView.from(activity);
     }
 
+    @Transactional
     public List<ActivityView> listPublic(String keyword, ActivityStatus status) {
-        ActivityStatus visibleStatus = status == null ? null : status;
-        if (visibleStatus != null && !isPublicStatus(visibleStatus)) {
+        if (status != null && !isPublicStatus(status)) {
             throw new BusinessException(400, "当前状态不允许公开查询");
         }
         var query = Wrappers.<Activity>lambdaQuery()
-                .in(visibleStatus == null, Activity::getStatus,
+                .in(Activity::getStatus,
                         ActivityStatus.PUBLISHED, ActivityStatus.ONGOING, ActivityStatus.ENDED)
-                .eq(visibleStatus != null, Activity::getStatus, visibleStatus)
                 .and(keyword != null && !keyword.isBlank(),
                         wrapper -> wrapper.like(Activity::getTitle, keyword.trim())
                                 .or()
                                 .like(Activity::getLocation, keyword.trim()))
                 .orderByAsc(Activity::getStartTime);
-        return activityMapper.selectList(query).stream().map(ActivityView::from).toList();
+        return activityMapper.selectList(query).stream()
+                .map(this::synchronizeStatus)
+                .filter(activity -> isPublicStatus(activity.getStatus()))
+                .filter(activity -> status == null || activity.getStatus() == status)
+                .map(ActivityView::from)
+                .toList();
     }
 
+    @Transactional
     public ActivityView getPublic(Long id) {
-        Activity activity = getRequired(id);
+        Activity activity = synchronizeStatus(getRequired(id));
         if (!isPublicStatus(activity.getStatus())) {
             throw new BusinessException(404, "活动不存在");
         }
         return ActivityView.from(activity);
     }
 
+    @Transactional
     public List<ActivityView> listMine(Authentication authentication) {
         AuthenticatedUser user = requireOrganizer(authentication);
         var query = Wrappers.<Activity>lambdaQuery()
                 .eq(user.getRole() != UserRole.ADMIN, Activity::getOrganizerId, user.user().getId())
                 .orderByDesc(Activity::getCreatedAt);
-        return activityMapper.selectList(query).stream().map(ActivityView::from).toList();
+        return activityMapper.selectList(query).stream().map(this::synchronizeStatus).map(ActivityView::from).toList();
     }
 
+    @Transactional
     public ActivityView getMine(Long id, Authentication authentication) {
-        Activity activity = getRequired(id);
+        Activity activity = synchronizeStatus(getRequired(id));
         ensureCanManage(activity, authentication);
         return ActivityView.from(activity);
     }
 
+    @Transactional
     public List<ActivityView> listPendingReview() {
         return activityMapper.selectList(
                 Wrappers.<Activity>lambdaQuery()
                         .eq(Activity::getStatus, ActivityStatus.PENDING_REVIEW)
                         .orderByAsc(Activity::getCreatedAt)
-        ).stream().map(ActivityView::from).toList();
+        ).stream().map(this::synchronizeStatus).map(ActivityView::from).toList();
     }
 
+    @Transactional
     public List<ActivityView> listAll() {
         return activityMapper.selectList(Wrappers.<Activity>lambdaQuery().orderByDesc(Activity::getCreatedAt))
-                .stream().map(ActivityView::from).toList();
+                .stream().map(this::synchronizeStatus).map(ActivityView::from).toList();
     }
 
     @Transactional
@@ -168,10 +177,32 @@ public class ActivityService {
         return ActivityView.from(activity);
     }
 
+    @Transactional
+    public ActivityView start(Long id, Authentication authentication) {
+        Activity activity = getRequired(id);
+        ensureCanManage(activity, authentication);
+        ensureStatus(activity, ActivityStatus.PUBLISHED);
+        if (activity.getEndTime() == null || !activity.getEndTime().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(409, "活动已经结束，不能开启");
+        }
+        activity.setStatus(ActivityStatus.ONGOING);
+        activityMapper.updateById(activity);
+        return ActivityView.from(activity);
+    }
+
     private Activity getRequired(Long id) {
         Activity activity = activityMapper.selectById(id);
         if (activity == null) {
             throw new BusinessException(404, "活动不存在");
+        }
+        return activity;
+    }
+
+    private Activity synchronizeStatus(Activity activity) {
+        ActivityStatus resolved = ActivityStatusResolver.resolve(activity, LocalDateTime.now());
+        if (resolved != activity.getStatus()) {
+            activity.setStatus(resolved);
+            activityMapper.updateById(activity);
         }
         return activity;
     }

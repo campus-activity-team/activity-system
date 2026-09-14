@@ -1,26 +1,25 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../../stores/auth'
 import { getActivity } from '../../api/activity'
-import { cancelRegistration, checkin, getMyActivityRegistration, registerActivity } from '../../api/registration'
+import { cancelRegistration, getMyActivityRegistration, registerActivity } from '../../api/registration'
 import type { Activity } from '../../types/activity'
 import type { Registration } from '../../types/registration'
+import { formatActivityTime, getActivityDisplay } from '../../utils/activity'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
 const registrationLoading = ref(false)
-const checkinLoading = ref(false)
 const activity = ref<Activity | null>(null)
 const registration = ref<Registration | null>(null)
-const checkinToken = ref('')
+const now = ref(new Date())
+let clockTimer: ReturnType<typeof setInterval> | undefined
 
-function formatTime(value?: string) {
-  return value ? value.replace('T', ' ').slice(0, 16) : '-'
-}
+const activityDisplay = computed(() => activity.value ? getActivityDisplay(activity.value, now.value) : null)
 
 async function loadActivity() {
   loading.value = true
@@ -76,25 +75,13 @@ async function cancel() {
   }
 }
 
-async function doCheckin() {
-  if (!checkinToken.value.trim()) {
-    ElMessage.warning('请输入签到令牌')
-    return
-  }
-  checkinLoading.value = true
-  try {
-    await checkin(checkinToken.value.trim())
-    ElMessage.success('签到成功')
-    checkinToken.value = ''
-    await loadRegistration()
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message ?? '签到失败')
-  } finally {
-    checkinLoading.value = false
-  }
-}
-
-onMounted(loadActivity)
+onMounted(() => {
+  loadActivity()
+  clockTimer = setInterval(() => { now.value = new Date() }, 30_000)
+})
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
+})
 </script>
 
 <template>
@@ -106,8 +93,9 @@ onMounted(loadActivity)
         <div><h2>{{ activity.title }}</h2><p>{{ activity.location }}</p></div>
       </div>
       <el-descriptions :column="2" border>
-        <el-descriptions-item label="活动时间">{{ formatTime(activity.startTime) }} 至 {{ formatTime(activity.endTime) }}</el-descriptions-item>
-        <el-descriptions-item label="报名时间">{{ formatTime(activity.registrationStartTime) }} 至 {{ formatTime(activity.registrationEndTime) }}</el-descriptions-item>
+        <el-descriptions-item label="活动状态"><el-tag :type="activityDisplay?.type">{{ activityDisplay?.label }}</el-tag></el-descriptions-item>
+        <el-descriptions-item label="活动时间">{{ formatActivityTime(activity.startTime) }} 至 {{ formatActivityTime(activity.endTime) }}</el-descriptions-item>
+        <el-descriptions-item label="报名时间">{{ formatActivityTime(activity.registrationStartTime) }} 至 {{ formatActivityTime(activity.registrationEndTime) }}</el-descriptions-item>
         <el-descriptions-item label="报名情况">{{ activity.currentRegisteredCount }} / {{ activity.capacity }}</el-descriptions-item>
         <el-descriptions-item label="剩余名额">{{ activity.remainingCapacity }}</el-descriptions-item>
       </el-descriptions>
@@ -118,15 +106,12 @@ onMounted(loadActivity)
           <el-tag type="success">已报名{{ registration.checkedIn ? ' · 已签到' : '' }}</el-tag>
           <el-button :loading="registrationLoading" @click="cancel">取消报名</el-button>
         </template>
-        <el-button v-else type="primary" :loading="registrationLoading" @click="register">{{ auth.isAuthenticated ? '立即报名' : '登录后报名' }}</el-button>
+        <el-button v-else type="primary" :disabled="!activityDisplay?.canRegister" :loading="registrationLoading" @click="register">{{ activityDisplay?.label === '报名未开始' ? '报名未开始' : activityDisplay?.label === '报名已截止' ? '报名已截止' : auth.isAuthenticated ? '立即报名' : '登录后报名' }}</el-button>
         <el-button v-if="auth.isAuthenticated" @click="router.push({ name: 'my-registrations' })">我的报名</el-button>
       </div>
-      <div v-if="activity.status === 'ONGOING' && auth.isAuthenticated" class="checkin-panel">
+      <div v-if="activityDisplay?.label === '进行中' && auth.isAuthenticated" class="checkin-panel">
         <h3>活动签到</h3>
-        <p>请向现场组织者获取当前 60 秒有效的签到令牌。</p>
-        <el-input v-model="checkinToken" placeholder="粘贴签到令牌" clearable>
-          <template #append><el-button :loading="checkinLoading" @click="doCheckin">签到</el-button></template>
-        </el-input>
+        <p>请使用手机扫描现场组织者展示的动态二维码，系统会自动验证报名状态并完成签到。</p>
       </div>
     </template>
   </el-card>

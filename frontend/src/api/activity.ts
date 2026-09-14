@@ -22,6 +22,10 @@ export function submitActivity(id: number) {
   return http.post<ApiEnvelope<Activity>>(`/activities/${id}/submit`)
 }
 
+export function startActivity(id: number) {
+  return http.post<ApiEnvelope<Activity>>(`/activities/${id}/start`)
+}
+
 export function deleteActivity(id: number) {
   return http.delete<ApiEnvelope<null>>(`/activities/${id}`)
 }
