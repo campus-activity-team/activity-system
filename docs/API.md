@@ -47,7 +47,7 @@
 
 默认账号只在 `dev` Profile 下初始化，生产环境不会创建这些账号。
 
-开发环境还会为 `organizer` 自动创建一组测试活动，覆盖 `DRAFT`、`PENDING_REVIEW`、`REJECTED`、`APPROVED`、`PUBLISHED`、`ONGOING` 和 `ENDED` 状态，并为进行中的签到演示活动创建两个测试报名记录。
+开发环境还会为 `organizer` 自动创建一组测试活动，覆盖 `DRAFT`、`PENDING_REVIEW`、`REJECTED`、`APPROVED`、`PUBLISHED`、`ONGOING` 和 `ENDED` 状态，并为进行中的签到演示活动创建三个测试报名记录。
 
 ## Phase 3 活动与审核接口
 
@@ -103,5 +103,15 @@
 - `GET /api/organizer/activities/{activityId}/feedbacks`：活动发起者或管理员查看匿名反馈统计看板
 
 活动必须开启反馈收集并已结束，参与者必须保持有效报名且成功签到。设置反馈截止时间后，超过截止时间只能查看已有反馈，不能新增或修改。统计看板提供报名数、签到数、反馈数、反馈率、三项平均分、总体评分分布和匿名意见，不返回评价者身份。
+
+## 通知与操作日志接口
+
+- `GET /api/notifications`：当前用户查看最近 100 条站内通知
+- `GET /api/notifications/unread-count`：当前用户查看未读通知数量
+- `POST /api/notifications/{id}/read`：将属于当前用户的指定通知标为已读
+- `POST /api/notifications/read-all`：将当前用户全部通知标为已读
+- `GET /api/admin/operation-logs`：管理员查询最近操作日志，可按 `operation`、`targetType`、`userId` 过滤，`limit` 范围为 1～200
+
+报名成功、活动审核/发布/下架以及发起者申请审批结果会生成站内通知。后台每分钟检查一次未来 24 小时内开始的已发布活动，为保持有效报名的用户生成一次开场提醒；提醒使用唯一键去重，不会因轮询重复发送。活动审核、发布、下架、手动开启/结束、手动补签/撤销、身份审批和角色变更等关键动作会写入管理员可查询的操作日志。
 
 错误响应使用对应 HTTP 状态码，并保持相同 JSON 结构。

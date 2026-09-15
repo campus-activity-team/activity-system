@@ -39,6 +39,7 @@ class RegistrationServiceTest {
     private RegistrationMapper registrationMapper;
     private AttendanceMapper attendanceMapper;
     private UserMapper userMapper;
+    private NotificationService notificationService;
     private RegistrationService registrationService;
     private Activity activity;
 
@@ -48,11 +49,13 @@ class RegistrationServiceTest {
         registrationMapper = mock(RegistrationMapper.class);
         attendanceMapper = mock(AttendanceMapper.class);
         userMapper = mock(UserMapper.class);
+        notificationService = mock(NotificationService.class);
         registrationService = new RegistrationService(
                 activityMapper,
                 registrationMapper,
                 attendanceMapper,
-                userMapper
+                userMapper,
+                notificationService
         );
 
         activity = new Activity();

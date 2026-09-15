@@ -33,17 +33,20 @@ public class RegistrationService {
     private final RegistrationMapper registrationMapper;
     private final AttendanceMapper attendanceMapper;
     private final UserMapper userMapper;
+    private final NotificationService notificationService;
 
     public RegistrationService(
             ActivityMapper activityMapper,
             RegistrationMapper registrationMapper,
             AttendanceMapper attendanceMapper,
-            UserMapper userMapper
+            UserMapper userMapper,
+            NotificationService notificationService
     ) {
         this.activityMapper = activityMapper;
         this.registrationMapper = registrationMapper;
         this.attendanceMapper = attendanceMapper;
         this.userMapper = userMapper;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -79,6 +82,14 @@ public class RegistrationService {
 
         activity.setCurrentRegisteredCount(registeredCount + 1);
         activityMapper.updateById(activity);
+        notificationService.create(
+                user.getId(),
+                "REGISTRATION_SUCCESS",
+                "活动报名成功",
+                "你已成功报名“" + activity.getTitle() + "”，请留意活动开始提醒。",
+                "ACTIVITY",
+                activity.getId()
+        );
         return toView(existing, activity, user);
     }
 

@@ -106,6 +106,10 @@ body {
   font-size: 14px;
 }
 
+.notification-badge .el-badge__content {
+  border: 0;
+}
+
 .full-button {
   width: 100%;
 }
@@ -465,6 +469,77 @@ body {
   margin: 16px 0;
 }
 
+.notification-actions,
+.notification-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-list {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.notification-item.unread {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.notification-item.unread .notification-dot {
+  background: #2563eb;
+}
+
+.notification-content {
+  min-width: 0;
+}
+
+.notification-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-content p {
+  margin: 8px 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.notification-content small {
+  color: #94a3b8;
+}
+
+.log-filters {
+  padding: 16px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.log-filters .el-select,
+.log-filters .el-input {
+  width: 200px;
+}
+
 @media (max-width: 560px) {
   .app-header {
     padding: 0 16px;
@@ -506,5 +581,25 @@ body {
   .feedback-metrics,
   .feedback-rating-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .notification-item {
+    grid-template-columns: 10px minmax(0, 1fr);
+  }
+
+  .notification-item-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .notification-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .log-filters .el-form-item,
+  .log-filters .el-select,
+  .log-filters .el-input {
+    width: 100%;
   }
 }

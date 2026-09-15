@@ -29,6 +29,7 @@ class ActivityServiceTest {
 
     private ActivityMapper activityMapper;
     private OperationLogService operationLogService;
+    private NotificationService notificationService;
     private ActivityService activityService;
     private Authentication organizerAuthentication;
 
@@ -36,7 +37,8 @@ class ActivityServiceTest {
     void setUp() {
         activityMapper = mock(ActivityMapper.class);
         operationLogService = mock(OperationLogService.class);
-        activityService = new ActivityService(activityMapper, operationLogService);
+        notificationService = mock(NotificationService.class);
+        activityService = new ActivityService(activityMapper, operationLogService, notificationService);
         User user = new User();
         user.setId(7L);
         user.setUsername("organizer");
@@ -152,6 +154,38 @@ class ActivityServiceTest {
         assertEquals(ActivityStatus.ONGOING, result.status());
         verify(activityMapper).updateById(activity);
         verify(operationLogService).record(7L, "ACTIVITY_MANUALLY_STARTED", "ACTIVITY", 22L);
+    }
+
+    @Test
+    void administratorApprovalNotifiesOrganizerAndWritesAuditLog() {
+        User administrator = new User();
+        administrator.setId(1L);
+        administrator.setUsername("admin");
+        administrator.setName("管理员");
+        administrator.setRole(UserRole.ADMIN);
+        administrator.setStatus(UserStatus.ACTIVE);
+        Authentication administratorAuthentication = new UsernamePasswordAuthenticationToken(
+                AuthenticatedUser.from(administrator), null, AuthenticatedUser.from(administrator).getAuthorities()
+        );
+        Activity activity = new Activity();
+        activity.setId(27L);
+        activity.setOrganizerId(7L);
+        activity.setTitle("校园讲座");
+        activity.setStatus(ActivityStatus.PENDING_REVIEW);
+        when(activityMapper.selectById(27L)).thenReturn(activity);
+
+        var result = activityService.approve(27L, administratorAuthentication);
+
+        assertEquals(ActivityStatus.APPROVED, result.status());
+        verify(operationLogService).record(1L, "ACTIVITY_APPROVED", "ACTIVITY", 27L);
+        verify(notificationService).create(
+                7L,
+                "ACTIVITY_APPROVED",
+                "活动审核已通过",
+                "“校园讲座”已通过审核，等待管理员发布。",
+                "ACTIVITY",
+                27L
+        );
     }
 
     @Test

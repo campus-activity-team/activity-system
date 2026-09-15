@@ -25,15 +25,18 @@ public class OrganizerApplicationService {
     private final OrganizerApplicationMapper organizerApplicationMapper;
     private final UserMapper userMapper;
     private final OperationLogService operationLogService;
+    private final NotificationService notificationService;
 
     public OrganizerApplicationService(
             OrganizerApplicationMapper organizerApplicationMapper,
             UserMapper userMapper,
-            OperationLogService operationLogService
+            OperationLogService operationLogService,
+            NotificationService notificationService
     ) {
         this.organizerApplicationMapper = organizerApplicationMapper;
         this.userMapper = userMapper;
         this.operationLogService = operationLogService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -109,6 +112,14 @@ public class OrganizerApplicationService {
                 "ORGANIZER_APPLICATION",
                 application.getId()
         );
+        notificationService.create(
+                applicant.getId(),
+                "ORGANIZER_APPLICATION_APPROVED",
+                "发起者申请已通过",
+                "你已获得活动发起者权限，可以开始创建活动。",
+                "ORGANIZER_APPLICATION",
+                application.getId()
+        );
         return toView(application, applicant);
     }
 
@@ -130,6 +141,14 @@ public class OrganizerApplicationService {
         operationLogService.record(
                 administrator.getId(),
                 "ORGANIZER_APPLICATION_REJECTED",
+                "ORGANIZER_APPLICATION",
+                application.getId()
+        );
+        notificationService.create(
+                applicant.getId(),
+                "ORGANIZER_APPLICATION_REJECTED",
+                "发起者申请未通过",
+                "申请未通过。原因：" + application.getReviewComment(),
                 "ORGANIZER_APPLICATION",
                 application.getId()
         );

@@ -6,6 +6,7 @@ import com.example.activity.service.ActivityService;
 import com.example.activity.vo.ActivityView;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,25 +38,26 @@ public class AdminActivityController {
     }
 
     @PostMapping("/activities/{id}/approve")
-    public ApiResponse<ActivityView> approve(@PathVariable Long id) {
-        return ApiResponse.success(activityService.approve(id));
+    public ApiResponse<ActivityView> approve(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(activityService.approve(id, authentication));
     }
 
     @PostMapping("/activities/{id}/reject")
     public ApiResponse<ActivityView> reject(
             @PathVariable Long id,
-            @Valid @RequestBody RejectActivityRequest request
+            @Valid @RequestBody RejectActivityRequest request,
+            Authentication authentication
     ) {
-        return ApiResponse.success(activityService.reject(id, request));
+        return ApiResponse.success(activityService.reject(id, request, authentication));
     }
 
     @PostMapping("/activities/{id}/publish")
-    public ApiResponse<ActivityView> publish(@PathVariable Long id) {
-        return ApiResponse.success(activityService.publish(id));
+    public ApiResponse<ActivityView> publish(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(activityService.publish(id, authentication));
     }
 
     @PostMapping("/activities/{id}/unpublish")
-    public ApiResponse<ActivityView> unpublish(@PathVariable Long id) {
-        return ApiResponse.success(activityService.unpublish(id));
+    public ApiResponse<ActivityView> unpublish(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(activityService.unpublish(id, authentication));
     }
 }

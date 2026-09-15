@@ -6,6 +6,7 @@ COPY src src
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:17-jre
+ENV TZ=Asia/Shanghai
 WORKDIR /app
 COPY --from=build /workspace/target/activity-system-backend-0.1.0-SNAPSHOT.jar app.jar
 EXPOSE 8080

@@ -12,6 +12,8 @@ docker compose logs -f backend
 
 后端 JWT 使用 `JWT_SECRET` 签名。开发时在 `.env` 中设置不少于 32 个字符的随机值；生产环境必须使用独立的高强度密钥，并设置合理的 `JWT_EXPIRATION`。
 
+后端容器默认使用 `Asia/Shanghai` 时区，确保活动自动开始、结束和开场提醒与页面填写的北京时间一致；如需部署到其他地区，可在 `.env` 通过 `APP_TIME_ZONE` 覆盖。
+
 ## 手机与二维码访问
 
 管理者可在动态二维码区域填写手机访问地址，浏览器会保存该设置；系统会拒绝 `localhost`、`127.0.0.1` 和 `0.0.0.0`。局域网示例为 `http://192.168.1.20:5173`。也可以用构建变量 `VITE_PUBLIC_APP_URL` 提供默认值：Docker Compose 在根目录 `.env` 中设置，Vite 开发服务器在 `frontend/.env.local` 中设置。
@@ -24,7 +26,7 @@ docker compose logs -f backend
 
 从旧版本数据库升级时需执行一次 `database/migrations/001_add_checkin_location.sql`；全新数据库已由 `database/init.sql` 直接创建这些字段。
 
-旧数据库还需按顺序执行 `database/migrations/002_create_checkin_anomalies.sql`、`database/migrations/003_create_organizer_applications.sql` 和 `database/migrations/004_create_feedbacks.sql`。
+旧数据库还需按顺序执行 `database/migrations/002_create_checkin_anomalies.sql`、`database/migrations/003_create_organizer_applications.sql`、`database/migrations/004_create_feedbacks.sql` 和 `database/migrations/005_create_notifications.sql`。
 
 生产环境不应开放管理员注册。首次部署且数据库中尚无管理员时，可临时设置 `BOOTSTRAP_ADMIN_ENABLED=true`、`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`（至少 12 位）和可选的 `BOOTSTRAP_ADMIN_NAME`；首个管理员创建成功后立即将 `BOOTSTRAP_ADMIN_ENABLED` 改回 `false` 并移除明文密码。后续管理员在“用户与权限”页面将已注册普通账号提升为管理员。
 

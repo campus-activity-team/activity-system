@@ -23,10 +23,16 @@ public class ActivityService {
 
     private final ActivityMapper activityMapper;
     private final OperationLogService operationLogService;
+    private final NotificationService notificationService;
 
-    public ActivityService(ActivityMapper activityMapper, OperationLogService operationLogService) {
+    public ActivityService(
+            ActivityMapper activityMapper,
+            OperationLogService operationLogService,
+            NotificationService notificationService
+    ) {
         this.activityMapper = activityMapper;
         this.operationLogService = operationLogService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -141,27 +147,48 @@ public class ActivityService {
     }
 
     @Transactional
-    public ActivityView approve(Long id) {
+    public ActivityView approve(Long id, Authentication authentication) {
+        AuthenticatedUser administrator = requireAdministrator(authentication);
         Activity activity = getRequired(id);
         ensureStatus(activity, ActivityStatus.PENDING_REVIEW);
         activity.setStatus(ActivityStatus.APPROVED);
         activity.setReviewComment(null);
         activityMapper.updateById(activity);
+        operationLogService.record(administrator.user().getId(), "ACTIVITY_APPROVED", "ACTIVITY", activity.getId());
+        notificationService.create(
+                activity.getOrganizerId(),
+                "ACTIVITY_APPROVED",
+                "活动审核已通过",
+                "“" + activity.getTitle() + "”已通过审核，等待管理员发布。",
+                "ACTIVITY",
+                activity.getId()
+        );
         return ActivityView.from(activity);
     }
 
     @Transactional
-    public ActivityView reject(Long id, RejectActivityRequest request) {
+    public ActivityView reject(Long id, RejectActivityRequest request, Authentication authentication) {
+        AuthenticatedUser administrator = requireAdministrator(authentication);
         Activity activity = getRequired(id);
         ensureStatus(activity, ActivityStatus.PENDING_REVIEW);
         activity.setStatus(ActivityStatus.REJECTED);
         activity.setReviewComment(request.reviewComment().trim());
         activityMapper.updateById(activity);
+        operationLogService.record(administrator.user().getId(), "ACTIVITY_REJECTED", "ACTIVITY", activity.getId());
+        notificationService.create(
+                activity.getOrganizerId(),
+                "ACTIVITY_REJECTED",
+                "活动审核未通过",
+                "“" + activity.getTitle() + "”未通过审核。原因：" + activity.getReviewComment(),
+                "ACTIVITY",
+                activity.getId()
+        );
         return ActivityView.from(activity);
     }
 
     @Transactional
-    public ActivityView publish(Long id) {
+    public ActivityView publish(Long id, Authentication authentication) {
+        AuthenticatedUser administrator = requireAdministrator(authentication);
         Activity activity = getRequired(id);
         ensureStatus(activity, ActivityStatus.APPROVED);
         if (!activity.getEndTime().isAfter(LocalDateTime.now())) {
@@ -169,15 +196,34 @@ public class ActivityService {
         }
         activity.setStatus(ActivityStatus.PUBLISHED);
         activityMapper.updateById(activity);
+        operationLogService.record(administrator.user().getId(), "ACTIVITY_PUBLISHED", "ACTIVITY", activity.getId());
+        notificationService.create(
+                activity.getOrganizerId(),
+                "ACTIVITY_PUBLISHED",
+                "活动已发布",
+                "“" + activity.getTitle() + "”已发布，参与者现在可以查看和报名。",
+                "ACTIVITY",
+                activity.getId()
+        );
         return ActivityView.from(activity);
     }
 
     @Transactional
-    public ActivityView unpublish(Long id) {
+    public ActivityView unpublish(Long id, Authentication authentication) {
+        AuthenticatedUser administrator = requireAdministrator(authentication);
         Activity activity = getRequired(id);
         ensureStatus(activity, ActivityStatus.PUBLISHED, ActivityStatus.ONGOING);
         activity.setStatus(ActivityStatus.APPROVED);
         activityMapper.updateById(activity);
+        operationLogService.record(administrator.user().getId(), "ACTIVITY_UNPUBLISHED", "ACTIVITY", activity.getId());
+        notificationService.create(
+                activity.getOrganizerId(),
+                "ACTIVITY_UNPUBLISHED",
+                "活动已下架",
+                "“" + activity.getTitle() + "”已由管理员下架。",
+                "ACTIVITY",
+                activity.getId()
+        );
         return ActivityView.from(activity);
     }
 
@@ -227,6 +273,14 @@ public class ActivityService {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUser user)
                 || (user.getRole() != UserRole.ORGANIZER && user.getRole() != UserRole.ADMIN)) {
             throw new BusinessException(403, "只有组织者或管理员可以管理活动");
+        }
+        return user;
+    }
+
+    private AuthenticatedUser requireAdministrator(Authentication authentication) {
+        AuthenticatedUser user = requireOrganizer(authentication);
+        if (user.getRole() != UserRole.ADMIN) {
+            throw new BusinessException(403, "只有管理员可以执行此操作");
         }
         return user;
     }

@@ -28,6 +28,7 @@ class OrganizerApplicationServiceTest {
     private OrganizerApplicationMapper organizerApplicationMapper;
     private UserMapper userMapper;
     private OperationLogService operationLogService;
+    private NotificationService notificationService;
     private OrganizerApplicationService organizerApplicationService;
     private User applicant;
     private Authentication applicantAuthentication;
@@ -39,10 +40,12 @@ class OrganizerApplicationServiceTest {
         organizerApplicationMapper = mock(OrganizerApplicationMapper.class);
         userMapper = mock(UserMapper.class);
         operationLogService = mock(OperationLogService.class);
+        notificationService = mock(NotificationService.class);
         organizerApplicationService = new OrganizerApplicationService(
                 organizerApplicationMapper,
                 userMapper,
-                operationLogService
+                operationLogService,
+                notificationService
         );
 
         applicant = user(8L, "student", UserRole.USER);
@@ -99,6 +102,14 @@ class OrganizerApplicationServiceTest {
         assertEquals(UserRole.ORGANIZER, applicant.getRole());
         verify(userMapper).updateById(applicant);
         verify(operationLogService).record(1L, "ORGANIZER_APPLICATION_APPROVED", "ORGANIZER_APPLICATION", 20L);
+        verify(notificationService).create(
+                8L,
+                "ORGANIZER_APPLICATION_APPROVED",
+                "发起者申请已通过",
+                "你已获得活动发起者权限，可以开始创建活动。",
+                "ORGANIZER_APPLICATION",
+                20L
+        );
     }
 
     @Test
