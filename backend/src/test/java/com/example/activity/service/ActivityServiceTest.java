@@ -17,7 +17,9 @@ import org.springframework.security.core.Authentication;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -66,6 +68,7 @@ class ActivityServiceTest {
     void rejectsInvalidScheduleBeforePersisting() {
         ActivityRequest request = new ActivityRequest(
                 "活动", "介绍", null, "地点",
+                null, null, null,
                 LocalDateTime.now().plusDays(2),
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(1),
@@ -114,6 +117,25 @@ class ActivityServiceTest {
     }
 
     @Test
+    void publicActivityHidesCheckinCoordinates() {
+        Activity activity = new Activity();
+        activity.setId(23L);
+        activity.setStatus(ActivityStatus.ONGOING);
+        activity.setEndTime(LocalDateTime.now().plusHours(2));
+        activity.setCheckinLatitude(31.2304);
+        activity.setCheckinLongitude(121.4737);
+        activity.setCheckinRadiusMeters(100);
+        when(activityMapper.selectById(23L)).thenReturn(activity);
+
+        var result = activityService.getPublic(23L);
+
+        assertTrue(result.locationCheckinRequired());
+        assertNull(result.checkinLatitude());
+        assertNull(result.checkinLongitude());
+        assertNull(result.checkinRadiusMeters());
+    }
+
+    @Test
     void organizerCanStartPublishedActivityBeforeScheduledTime() {
         Activity activity = new Activity();
         activity.setId(22L);
@@ -133,6 +155,7 @@ class ActivityServiceTest {
         LocalDateTime now = LocalDateTime.now();
         return new ActivityRequest(
                 "活动", "介绍", null, "地点",
+                null, null, null,
                 now.plusDays(2),
                 now.plusDays(2).plusHours(2),
                 now.plusDays(1),

@@ -21,6 +21,22 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX idx_users_status (status)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS organizer_applications (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  reason VARCHAR(1000) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+  review_comment VARCHAR(1000),
+  reviewed_by BIGINT,
+  reviewed_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_organizer_applications_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT fk_organizer_applications_reviewer FOREIGN KEY (reviewed_by) REFERENCES users (id),
+  UNIQUE KEY uk_organizer_applications_user (user_id),
+  INDEX idx_organizer_applications_status_time (status, updated_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS activities (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   title VARCHAR(200) NOT NULL,
@@ -28,6 +44,9 @@ CREATE TABLE IF NOT EXISTS activities (
   cover_image VARCHAR(512),
   organizer_id BIGINT NOT NULL,
   location VARCHAR(255) NOT NULL,
+  checkin_latitude DECIMAL(10,7),
+  checkin_longitude DECIMAL(10,7),
+  checkin_radius_meters INT,
   start_time DATETIME NOT NULL,
   end_time DATETIME NOT NULL,
   registration_start_time DATETIME NOT NULL,
@@ -82,6 +101,22 @@ CREATE TABLE IF NOT EXISTS attendances (
   CONSTRAINT fk_attendances_registration FOREIGN KEY (registration_id) REFERENCES registrations (id),
   UNIQUE KEY uk_attendances_activity_user (activity_id, user_id),
   INDEX idx_attendances_activity_time (activity_id, checkin_time)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS checkin_anomalies (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  activity_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  reason VARCHAR(40) NOT NULL,
+  message VARCHAR(255) NOT NULL,
+  latitude DECIMAL(10,7),
+  longitude DECIMAL(10,7),
+  distance_meters INT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_checkin_anomalies_activity FOREIGN KEY (activity_id) REFERENCES activities (id),
+  CONSTRAINT fk_checkin_anomalies_user FOREIGN KEY (user_id) REFERENCES users (id),
+  INDEX idx_checkin_anomalies_activity_time (activity_id, created_at),
+  INDEX idx_checkin_anomalies_user_time (user_id, created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS feedbacks (

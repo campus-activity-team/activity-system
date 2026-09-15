@@ -18,6 +18,9 @@ public class Activity {
     private String coverImage;
     private Long organizerId;
     private String location;
+    private Double checkinLatitude;
+    private Double checkinLongitude;
+    private Integer checkinRadiusMeters;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private LocalDateTime registrationStartTime;

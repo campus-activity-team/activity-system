@@ -40,7 +40,7 @@ logging:
 security:
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-to-at-least-32-bytes}
-    expiration: ${JWT_EXPIRATION:PT2H}
+    expiration: ${JWT_EXPIRATION:P30D}
 
 ai:
   deepseek:
@@ -52,3 +52,10 @@ ai:
     read-timeout: ${AI_READ_TIMEOUT:PT30S}
     max-tokens: ${AI_MAX_TOKENS:1200}
     requests-per-minute: ${AI_REQUESTS_PER_MINUTE:5}
+
+app:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    name: ${BOOTSTRAP_ADMIN_NAME:系统管理员}

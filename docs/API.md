@@ -21,6 +21,20 @@
 - `POST /api/auth/logout`：无状态 JWT 的客户端退出确认
 - `GET /api/auth/me`：读取当前登录用户，不返回密码字段
 
+公开注册始终创建 `USER` 普通用户，不接受客户端传入角色，避免自行注册为发起者或管理员。
+
+## 身份与权限接口
+
+- `GET /api/organizer-applications/mine`：查看自己的发起者申请
+- `POST /api/organizer-applications`：普通用户提交或在驳回后重新提交发起者申请
+- `GET /api/admin/organizer-applications`：管理员查看全部发起者申请
+- `POST /api/admin/organizer-applications/{id}/approve`：通过申请并将用户升级为 `ORGANIZER`
+- `POST /api/admin/organizer-applications/{id}/reject`：驳回申请并填写审核意见
+- `GET /api/admin/users`：管理员查看用户列表
+- `POST /api/admin/users/{id}/role`：管理员验证当前密码后调整其他用户角色
+
+管理员不能修改自己的角色，系统不能移除最后一名有效管理员。管理员不提供公开注册入口：首个管理员由部署引导创建，后续管理员应先注册普通账号，再由现有管理员提升。身份申请审批和角色变更都会写入 `operation_logs`。
+
 开发环境会自动创建以下账号（仅用于本地演示）：
 
 | 角色 | 用户名 | 密码 |
@@ -65,9 +79,16 @@
 - `DELETE /api/registrations/activities/{activityId}`：活动开始前取消报名
 - `GET /api/organizer/activities/{activityId}/registrations`：组织者或管理员查看报名名单
 - `GET /api/organizer/activities/{activityId}/attendances`：组织者或管理员查看签到记录
+- `GET /api/organizer/activities/{activityId}/checkin-anomalies`：组织者或管理员查看该活动的异常签到尝试
 - `POST /api/organizer/activities/{activityId}/checkin-token`：为进行中活动生成 60 秒有效签到令牌，前端将其编码为动态二维码
-- `POST /api/checkins`：已报名用户扫码后使用二维码中的短期令牌签到；重复提交会幂等返回已有签到结果，过期令牌会返回业务错误
+- `POST /api/checkins`：已报名用户扫码后使用二维码中的短期令牌签到；启用位置签到的活动还需提交 `latitude`、`longitude`，后端计算与活动坐标的距离；重复提交会幂等返回已有签到结果，过期令牌会返回业务错误
 
 组织者端不会直接要求参会者手动输入令牌。二维码链接会打开 `/checkin` 页面，登录后自动提交并停留展示“已完成签到”；组织者和管理员页面每 3 秒同步最新签到记录。本地演示时请使用手机可访问的局域网前端地址生成二维码，不要使用手机无法访问的 `localhost` 地址。
+
+局域网前端来源必须在后端 CORS 白名单中；Docker Compose 默认允许常见私有网段，正式部署应通过 `APP_CORS_ALLOWED_ORIGIN_PATTERNS` 配置精确的 HTTPS 前端域名。
+
+活动创建时可选填 `checkinLatitude`、`checkinLongitude` 和 `checkinRadiusMeters` 启用地理围栏。三项必须同时配置，半径范围为 20～2000 米。未配置时保持纯动态二维码签到。手机浏览器定位通常要求 HTTPS，局域网 HTTP 环境下不要为演示活动启用位置校验。
+
+系统会记录可关联到活动的过期二维码、非签到时段、未报名、未提供定位和超出地理围栏尝试。异常记录采用独立事务保存，仅对应活动的组织者和管理员可查看；无法关联活动的随机无效令牌不会写入，避免被恶意请求灌满日志。
 
 错误响应使用对应 HTTP 状态码，并保持相同 JSON 结构。反馈业务接口仍将在后续阶段添加。

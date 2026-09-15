@@ -1,6 +1,6 @@
 import { http } from './http'
 import type { ApiEnvelope } from '../types/auth'
-import type { Attendance, CheckinResult, CheckinToken, Registration } from '../types/registration'
+import type { Attendance, CheckinAnomaly, CheckinResult, CheckinToken, Registration } from '../types/registration'
 
 export function getMyRegistrations() {
   return http.get<ApiEnvelope<Registration[]>>('/registrations/mine')
@@ -26,10 +26,14 @@ export function getActivityAttendances(activityId: number) {
   return http.get<ApiEnvelope<Attendance[]>>(`/organizer/activities/${activityId}/attendances`)
 }
 
+export function getActivityCheckinAnomalies(activityId: number) {
+  return http.get<ApiEnvelope<CheckinAnomaly[]>>(`/organizer/activities/${activityId}/checkin-anomalies`)
+}
+
 export function issueCheckinToken(activityId: number) {
   return http.post<ApiEnvelope<CheckinToken>>(`/organizer/activities/${activityId}/checkin-token`)
 }
 
-export function checkin(token: string) {
-  return http.post<ApiEnvelope<CheckinResult>>('/checkins', { token })
+export function checkin(token: string, location?: { latitude: number; longitude: number }) {
+  return http.post<ApiEnvelope<CheckinResult>>('/checkins', { token, ...location })
 }

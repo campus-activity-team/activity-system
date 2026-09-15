@@ -15,6 +15,10 @@ export interface Activity {
   coverImage?: string
   organizerId: number
   location: string
+  checkinLatitude?: number
+  checkinLongitude?: number
+  checkinRadiusMeters?: number
+  locationCheckinRequired: boolean
   startTime: string
   endTime: string
   registrationStartTime: string
@@ -35,6 +39,9 @@ export interface ActivityPayload {
   description: string
   coverImage?: string
   location: string
+  checkinLatitude?: number
+  checkinLongitude?: number
+  checkinRadiusMeters?: number
   startTime: string
   endTime: string
   registrationStartTime: string

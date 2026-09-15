@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { checkin } from '../../api/registration'
+import { getActivity } from '../../api/activity'
 import { useAuthStore } from '../../stores/auth'
 import type { CheckinResult } from '../../types/registration'
 
@@ -31,16 +32,40 @@ async function completeCheckin() {
   }
 
   try {
-    const response = await checkin(token)
+    const activityId = Number(route.query.activityId)
+    let location: { latitude: number; longitude: number } | undefined
+    if (Number.isInteger(activityId) && activityId > 0) {
+      const activity = (await getActivity(activityId)).data.data
+      if (activity.locationCheckinRequired) {
+        location = await requestLocation()
+      }
+    }
+    const response = await checkin(token, location)
     result.value = response.data.data
     succeeded.value = true
     message.value = '签到记录已保存，并同步给活动管理者和发起者。'
     ElMessage.success('已完成签到')
   } catch (error: any) {
-    message.value = error?.response?.data?.message ?? '签到失败，请让组织者刷新二维码后重试。'
+    message.value = error?.response?.data?.message ?? error?.message ?? '签到失败，请让组织者刷新二维码后重试。'
   } finally {
     loading.value = false
   }
+}
+
+function requestLocation(): Promise<{ latitude: number; longitude: number }> {
+  if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+    return Promise.reject(new Error('该活动启用了位置签到，但当前局域网 HTTP 无法获取定位，请使用 HTTPS 或关闭位置签到。'))
+  }
+  if (!navigator.geolocation) {
+    return Promise.reject(new Error('当前浏览器不支持定位，请开启手机定位后重试。'))
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => reject(new Error('无法获取当前位置，请允许浏览器使用定位后重试。')),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
+    )
+  })
 }
 
 onMounted(completeCheckin)

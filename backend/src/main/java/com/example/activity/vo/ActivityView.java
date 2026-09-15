@@ -12,6 +12,10 @@ public record ActivityView(
         String coverImage,
         Long organizerId,
         String location,
+        Double checkinLatitude,
+        Double checkinLongitude,
+        Integer checkinRadiusMeters,
+        boolean locationCheckinRequired,
         LocalDateTime startTime,
         LocalDateTime endTime,
         LocalDateTime registrationStartTime,
@@ -28,8 +32,19 @@ public record ActivityView(
 ) {
 
     public static ActivityView from(Activity activity) {
+        return from(activity, true);
+    }
+
+    public static ActivityView publicFrom(Activity activity) {
+        return from(activity, false);
+    }
+
+    private static ActivityView from(Activity activity, boolean includeCheckinCoordinates) {
         int registered = activity.getCurrentRegisteredCount() == null ? 0 : activity.getCurrentRegisteredCount();
         int capacity = activity.getCapacity() == null ? 0 : activity.getCapacity();
+        boolean locationCheckinRequired = activity.getCheckinLatitude() != null
+                && activity.getCheckinLongitude() != null
+                && activity.getCheckinRadiusMeters() != null;
         return new ActivityView(
                 activity.getId(),
                 activity.getTitle(),
@@ -37,6 +52,10 @@ public record ActivityView(
                 activity.getCoverImage(),
                 activity.getOrganizerId(),
                 activity.getLocation(),
+                includeCheckinCoordinates ? activity.getCheckinLatitude() : null,
+                includeCheckinCoordinates ? activity.getCheckinLongitude() : null,
+                includeCheckinCoordinates ? activity.getCheckinRadiusMeters() : null,
+                locationCheckinRequired,
                 activity.getStartTime(),
                 activity.getEndTime(),
                 activity.getRegistrationStartTime(),

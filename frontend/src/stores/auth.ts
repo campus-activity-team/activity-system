@@ -53,8 +53,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await getCurrentUser()
       user.value = response.data.data
       localStorage.setItem(userStorageKey, JSON.stringify(user.value))
-    } catch {
-      clearSession()
+    } catch (error: any) {
+      if (error?.response?.status === 401) clearSession()
     }
   }
 

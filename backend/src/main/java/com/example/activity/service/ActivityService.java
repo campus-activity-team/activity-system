@@ -31,6 +31,7 @@ public class ActivityService {
     public ActivityView create(ActivityRequest request, Authentication authentication) {
         AuthenticatedUser user = requireOrganizer(authentication);
         validateSchedule(request);
+        validateLocationSettings(request);
         Activity activity = new Activity();
         activity.setOrganizerId(user.user().getId());
         activity.setCurrentRegisteredCount(0);
@@ -46,6 +47,7 @@ public class ActivityService {
         ensureCanManage(activity, authentication);
         ensureStatus(activity, ActivityStatus.DRAFT, ActivityStatus.REJECTED);
         validateSchedule(request);
+        validateLocationSettings(request);
         int registered = activity.getCurrentRegisteredCount() == null ? 0 : activity.getCurrentRegisteredCount();
         if (request.capacity() < registered) {
             throw new BusinessException(409, "活动容量不能小于当前报名人数");
@@ -92,7 +94,7 @@ public class ActivityService {
                 .map(this::synchronizeStatus)
                 .filter(activity -> isPublicStatus(activity.getStatus()))
                 .filter(activity -> status == null || activity.getStatus() == status)
-                .map(ActivityView::from)
+                .map(ActivityView::publicFrom)
                 .toList();
     }
 
@@ -102,7 +104,7 @@ public class ActivityService {
         if (!isPublicStatus(activity.getStatus())) {
             throw new BusinessException(404, "活动不存在");
         }
-        return ActivityView.from(activity);
+        return ActivityView.publicFrom(activity);
     }
 
     @Transactional
@@ -250,6 +252,21 @@ public class ActivityService {
         }
     }
 
+    private void validateLocationSettings(ActivityRequest request) {
+        boolean hasLatitude = request.checkinLatitude() != null;
+        boolean hasLongitude = request.checkinLongitude() != null;
+        boolean hasRadius = request.checkinRadiusMeters() != null;
+        if (hasLatitude != hasLongitude) {
+            throw new BusinessException(400, "位置签到必须同时填写纬度和经度");
+        }
+        if ((hasLatitude || hasLongitude) && !hasRadius) {
+            throw new BusinessException(400, "启用位置签到时必须填写允许半径");
+        }
+        if (!hasLatitude && !hasLongitude && hasRadius) {
+            throw new BusinessException(400, "填写签到半径前请先设置签到位置");
+        }
+    }
+
     private void validateStoredSchedule(Activity activity) {
         if (!activity.getRegistrationStartTime().isBefore(activity.getRegistrationEndTime())
                 || !activity.getStartTime().isBefore(activity.getEndTime())
@@ -263,6 +280,9 @@ public class ActivityService {
         activity.setDescription(request.description().trim());
         activity.setCoverImage(blankToNull(request.coverImage()));
         activity.setLocation(request.location().trim());
+        activity.setCheckinLatitude(request.checkinLatitude());
+        activity.setCheckinLongitude(request.checkinLongitude());
+        activity.setCheckinRadiusMeters(request.checkinRadiusMeters());
         activity.setStartTime(request.startTime());
         activity.setEndTime(request.endTime());
         activity.setRegistrationStartTime(request.registrationStartTime());

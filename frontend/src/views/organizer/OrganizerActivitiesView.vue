@@ -4,10 +4,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { createActivity, deleteActivity, getMyActivities, startActivity, submitActivity, updateActivity } from '../../api/activity'
 import { generateActivityCopy } from '../../api/ai'
-import { getActivityAttendances, getActivityRegistrations, issueCheckinToken } from '../../api/registration'
+import { getActivityAttendances, getActivityCheckinAnomalies, getActivityRegistrations, issueCheckinToken } from '../../api/registration'
 import type { Activity, ActivityPayload } from '../../types/activity'
 import type { ActivityCopyRequest, ActivityCopyResponse } from '../../types/ai'
-import type { Attendance, CheckinToken, Registration } from '../../types/registration'
+import type { Attendance, CheckinAnomaly, CheckinAnomalyReason, CheckinToken, Registration } from '../../types/registration'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -16,6 +16,9 @@ const form = reactive<ActivityPayload>({
   title: '',
   description: '',
   location: '',
+  checkinLatitude: undefined,
+  checkinLongitude: undefined,
+  checkinRadiusMeters: undefined,
   startTime: '',
   endTime: '',
   registrationStartTime: '',
@@ -31,6 +34,7 @@ const detailDialogVisible = ref(false)
 const detailActivity = ref<Activity | null>(null)
 const detailRegistrations = ref<Registration[]>([])
 const detailAttendances = ref<Attendance[]>([])
+const detailCheckinAnomalies = ref<CheckinAnomaly[]>([])
 const detailLoading = ref(false)
 const checkinToken = ref<CheckinToken | null>(null)
 const checkinQrCode = ref('')
@@ -66,6 +70,14 @@ const statusLabel: Record<string, string> = {
   ENDED: '已结束',
 }
 
+const anomalyReasonLabel: Record<CheckinAnomalyReason, string> = {
+  EXPIRED_TOKEN: '二维码过期',
+  OUTSIDE_CHECKIN_TIME: '非签到时段',
+  NOT_REGISTERED: '未报名',
+  LOCATION_REQUIRED: '未提供定位',
+  OUTSIDE_GEOFENCE: '超出签到范围',
+}
+
 async function loadActivities() {
   loading.value = true
   try {
@@ -98,7 +110,7 @@ async function saveDraft() {
 
 function resetForm() {
   editingId.value = null
-  Object.assign(form, { title: '', description: '', location: '', startTime: '', endTime: '', registrationStartTime: '', registrationEndTime: '', capacity: 100, requireFeedback: false, coverImage: undefined, feedbackDeadline: undefined })
+  Object.assign(form, { title: '', description: '', location: '', checkinLatitude: undefined, checkinLongitude: undefined, checkinRadiusMeters: undefined, startTime: '', endTime: '', registrationStartTime: '', registrationEndTime: '', capacity: 100, requireFeedback: false, coverImage: undefined, feedbackDeadline: undefined })
 }
 
 function editActivity(activity: Activity) {
@@ -107,6 +119,9 @@ function editActivity(activity: Activity) {
     title: activity.title,
     description: activity.description,
     location: activity.location,
+    checkinLatitude: activity.checkinLatitude,
+    checkinLongitude: activity.checkinLongitude,
+    checkinRadiusMeters: activity.checkinRadiusMeters,
     startTime: activity.startTime,
     endTime: activity.endTime,
     registrationStartTime: activity.registrationStartTime,
@@ -116,6 +131,23 @@ function editActivity(activity: Activity) {
     coverImage: activity.coverImage,
     feedbackDeadline: activity.feedbackDeadline,
   })
+}
+
+function useCurrentLocation() {
+  if (!navigator.geolocation) {
+    ElMessage.warning('当前浏览器不支持定位')
+    return
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      form.checkinLatitude = Number(position.coords.latitude.toFixed(7))
+      form.checkinLongitude = Number(position.coords.longitude.toFixed(7))
+      if (!form.checkinRadiusMeters) form.checkinRadiusMeters = 100
+      ElMessage.success('已填入当前坐标，请确认活动地点后保存')
+    },
+    () => ElMessage.error('无法获取当前位置，请检查定位权限；正式环境需要 HTTPS'),
+    { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
+  )
 }
 
 async function removeActivity(id: number) {
@@ -162,18 +194,28 @@ async function loadActivityDetailData(showLoading: boolean) {
   if (!detailActivity.value) return
   if (showLoading) detailLoading.value = true
   try {
-    const [registrationResponse, attendanceResponse] = await Promise.all([
+    const [registrationResponse, attendanceResponse, anomalyResponse] = await Promise.all([
       getActivityRegistrations(detailActivity.value.id),
       getActivityAttendances(detailActivity.value.id),
+      getActivityCheckinAnomalies(detailActivity.value.id),
     ])
     detailRegistrations.value = registrationResponse.data.data
     detailAttendances.value = attendanceResponse.data.data
+    detailCheckinAnomalies.value = anomalyResponse.data.data
     attendanceSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (error: any) {
     if (showLoading) ElMessage.error(error?.response?.data?.message ?? '活动详情加载失败')
   } finally {
     if (showLoading) detailLoading.value = false
   }
+}
+
+function anomalyLocation(anomaly: CheckinAnomaly) {
+  if (anomaly.distanceMeters != null) return `距签到点约 ${anomaly.distanceMeters} 米`
+  if (anomaly.latitude != null && anomaly.longitude != null) {
+    return `${anomaly.latitude.toFixed(5)}, ${anomaly.longitude.toFixed(5)}`
+  }
+  return '未提供定位'
 }
 
 function isLocalOnlyHostname(hostname: string) {
@@ -313,6 +355,16 @@ onUnmounted(() => {
           <el-form-item label="活动名称"><el-input v-model="form.title" placeholder="例如：校园春季运动会" /></el-form-item>
           <el-form-item label="活动地点"><el-input v-model="form.location" placeholder="例如：大学生活动中心" /></el-form-item>
         </div>
+        <el-divider content-position="left">签到位置（可选）</el-divider>
+        <div class="form-columns">
+          <el-form-item label="签到纬度"><el-input-number v-model="form.checkinLatitude" :precision="7" :step="0.000001" controls-position="right" placeholder="例如 31.2304" /></el-form-item>
+          <el-form-item label="签到经度"><el-input-number v-model="form.checkinLongitude" :precision="7" :step="0.000001" controls-position="right" placeholder="例如 121.4737" /></el-form-item>
+          <el-form-item label="允许半径（米）"><el-input-number v-model="form.checkinRadiusMeters" :min="20" :max="2000" :step="10" controls-position="right" placeholder="100" /></el-form-item>
+        </div>
+        <div class="location-actions">
+          <el-button size="small" @click="useCurrentLocation">使用当前设备定位</el-button>
+          <small>填写坐标后，扫码签到会要求手机定位并限制在该半径内；局域网 HTTP 通常无法获取定位。</small>
+        </div>
         <el-form-item label="活动介绍"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
         <div class="form-columns">
           <el-form-item label="活动开始"><el-date-picker v-model="form.startTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" /></el-form-item>
@@ -420,6 +472,24 @@ onUnmounted(() => {
               <el-table-column prop="username" label="用户名" width="150" />
               <el-table-column prop="studentId" label="学号" width="150" />
               <el-table-column prop="checkinTime" label="签到时间" min-width="180" />
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane :label="`异常尝试（${detailCheckinAnomalies.length}）`">
+            <div class="attendance-sync-bar">
+              <small>记录过期二维码、未报名、非签到时段和定位异常；每 3 秒自动同步。</small>
+              <el-button link type="primary" @click="loadActivityDetailData(false)">立即刷新</el-button>
+            </div>
+            <el-empty v-if="detailCheckinAnomalies.length === 0" description="暂无异常签到尝试" />
+            <el-table v-else :data="detailCheckinAnomalies" stripe>
+              <el-table-column prop="name" label="姓名" width="110" />
+              <el-table-column prop="studentId" label="学号" width="140" />
+              <el-table-column label="异常类型" width="130">
+                <template #default="{ row }"><el-tag type="danger">{{ anomalyReasonLabel[row.reason as CheckinAnomalyReason] }}</el-tag></template>
+              </el-table-column>
+              <el-table-column label="定位信息" min-width="170">
+                <template #default="{ row }">{{ anomalyLocation(row) }}</template>
+              </el-table-column>
+              <el-table-column prop="createdAt" label="尝试时间" min-width="180" />
             </el-table>
           </el-tab-pane>
         </el-tabs>

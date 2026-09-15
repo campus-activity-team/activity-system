@@ -213,7 +213,8 @@ body {
   gap: 14px;
 }
 
-.form-columns .el-date-editor {
+.form-columns .el-date-editor,
+.form-columns .el-input-number {
   width: 100%;
 }
 
@@ -293,6 +294,76 @@ body {
   justify-content: center;
 }
 
+.scanner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scanner-video {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 12px;
+  background: #111827;
+  object-fit: cover;
+}
+
+.scanner-hint,
+.scanner-help,
+.scanner-alert-text {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.scanner-alert-text {
+  color: inherit;
+}
+
+.scanner-hint {
+  text-align: center;
+  color: #2563eb;
+}
+
+.scanner-submit {
+  align-self: flex-end;
+}
+
+.scanner-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.location-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 20px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.muted-copy {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.application-status,
+.application-form,
+.management-alert,
+.role-change-form {
+  margin-top: 18px;
+}
+
+.role-change-form .el-select {
+  width: 100%;
+}
+
 .attendance-sync-bar {
   display: flex;
   align-items: center;
@@ -363,5 +434,10 @@ body {
   .checkin-qr-image {
     width: min(280px, 100%);
     height: auto;
+  }
+
+  .location-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

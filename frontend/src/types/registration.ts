@@ -43,3 +43,25 @@ export interface CheckinResult {
   checkinTime: string
   checkinMethod: string
 }
+
+export type CheckinAnomalyReason =
+  | 'EXPIRED_TOKEN'
+  | 'OUTSIDE_CHECKIN_TIME'
+  | 'NOT_REGISTERED'
+  | 'LOCATION_REQUIRED'
+  | 'OUTSIDE_GEOFENCE'
+
+export interface CheckinAnomaly {
+  id: number
+  activityId: number
+  userId: number
+  username: string
+  name: string
+  studentId?: string
+  reason: CheckinAnomalyReason
+  message: string
+  latitude?: number
+  longitude?: number
+  distanceMeters?: number
+  createdAt: string
+}
