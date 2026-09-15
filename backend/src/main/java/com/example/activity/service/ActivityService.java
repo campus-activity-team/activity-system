@@ -2,12 +2,16 @@ package com.example.activity.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.activity.dto.ActivityRequest;
+import com.example.activity.dto.CancelActivityRequest;
 import com.example.activity.dto.RejectActivityRequest;
 import com.example.activity.entity.Activity;
 import com.example.activity.entity.ActivityStatus;
+import com.example.activity.entity.Registration;
+import com.example.activity.entity.RegistrationStatus;
 import com.example.activity.entity.UserRole;
 import com.example.activity.exception.BusinessException;
 import com.example.activity.mapper.ActivityMapper;
+import com.example.activity.mapper.RegistrationMapper;
 import com.example.activity.security.AuthenticatedUser;
 import com.example.activity.vo.ActivityView;
 import org.springframework.security.core.Authentication;
@@ -22,15 +26,18 @@ import java.util.List;
 public class ActivityService {
 
     private final ActivityMapper activityMapper;
+    private final RegistrationMapper registrationMapper;
     private final OperationLogService operationLogService;
     private final NotificationService notificationService;
 
     public ActivityService(
             ActivityMapper activityMapper,
+            RegistrationMapper registrationMapper,
             OperationLogService operationLogService,
             NotificationService notificationService
     ) {
         this.activityMapper = activityMapper;
+        this.registrationMapper = registrationMapper;
         this.operationLogService = operationLogService;
         this.notificationService = notificationService;
     }
@@ -250,6 +257,60 @@ public class ActivityService {
         activityMapper.updateById(activity);
         operationLogService.record(manager.user().getId(), "ACTIVITY_MANUALLY_ENDED", "ACTIVITY", activity.getId());
         return ActivityView.from(activity);
+    }
+
+    @Transactional
+    public ActivityView withdrawReview(Long id, Authentication authentication) {
+        Activity activity = getRequired(id);
+        AuthenticatedUser manager = ensureCanManage(activity, authentication);
+        ensureStatus(activity, ActivityStatus.PENDING_REVIEW);
+        activity.setStatus(ActivityStatus.DRAFT);
+        activity.setReviewComment(null);
+        activityMapper.updateById(activity);
+        operationLogService.record(manager.user().getId(), "ACTIVITY_REVIEW_WITHDRAWN", "ACTIVITY", activity.getId());
+        return ActivityView.from(activity);
+    }
+
+    @Transactional
+    public ActivityView cancel(Long id, CancelActivityRequest request, Authentication authentication) {
+        Activity activity = synchronizeStatus(getRequired(id));
+        AuthenticatedUser manager = ensureCanManage(activity, authentication);
+        ensureStatus(activity, ActivityStatus.APPROVED, ActivityStatus.PUBLISHED, ActivityStatus.ONGOING);
+        activity.setStatus(ActivityStatus.CANCELLED);
+        activity.setCancellationReason(request.reason().trim());
+        activity.setCancelledAt(LocalDateTime.now());
+        activity.setCancelledBy(manager.user().getId());
+        activityMapper.updateById(activity);
+        operationLogService.record(manager.user().getId(), "ACTIVITY_CANCELLED", "ACTIVITY", activity.getId());
+        notifyCancellation(activity, manager);
+        return ActivityView.from(activity);
+    }
+
+    private void notifyCancellation(Activity activity, AuthenticatedUser manager) {
+        String participantContent = "你报名的“" + activity.getTitle() + "”已取消。原因：" + activity.getCancellationReason();
+        registrationMapper.selectByActivityId(activity.getId()).stream()
+                .filter(registration -> registration.getStatus() == RegistrationStatus.REGISTERED)
+                .map(Registration::getUserId)
+                .forEach(userId -> notificationService.createDeduplicated(
+                        userId,
+                        "ACTIVITY_CANCELLED",
+                        "活动已取消",
+                        participantContent,
+                        "ACTIVITY",
+                        activity.getId(),
+                        "activity-cancelled:" + activity.getId() + ":" + userId
+                ));
+        if (manager.getRole() == UserRole.ADMIN && !manager.user().getId().equals(activity.getOrganizerId())) {
+            notificationService.createDeduplicated(
+                    activity.getOrganizerId(),
+                    "ACTIVITY_CANCELLED_BY_ADMIN",
+                    "活动已由管理员取消",
+                    "“" + activity.getTitle() + "”已由管理员取消。原因：" + activity.getCancellationReason(),
+                    "ACTIVITY",
+                    activity.getId(),
+                    "activity-cancelled-organizer:" + activity.getId()
+            );
+        }
     }
 
     private Activity getRequired(Long id) {

@@ -21,6 +21,13 @@ const feedbackForm = reactive<FeedbackPayload>({
   comment: '',
 })
 
+const activityStatusLabel: Record<string, string> = {
+  PUBLISHED: '已发布',
+  ONGOING: '进行中',
+  ENDED: '已结束',
+  CANCELLED: '已取消',
+}
+
 function formatTime(value?: string) {
   return value ? value.replace('T', ' ').slice(0, 16) : '-'
 }
@@ -92,12 +99,16 @@ onMounted(loadRegistrations)
       <el-table-column prop="status" label="报名状态" width="110">
         <template #default="{ row }"><el-tag :type="row.status === 'REGISTERED' ? 'success' : 'info'">{{ row.status === 'REGISTERED' ? '已报名' : '已取消' }}</el-tag></template>
       </el-table-column>
+      <el-table-column label="活动状态" width="110">
+        <template #default="{ row }"><el-tag :type="row.activityStatus === 'CANCELLED' ? 'danger' : 'info'">{{ activityStatusLabel[row.activityStatus] ?? row.activityStatus }}</el-tag></template>
+      </el-table-column>
       <el-table-column prop="checkedIn" label="签到状态" width="110">
         <template #default="{ row }"><el-tag :type="row.checkedIn ? 'success' : 'info'">{{ row.checkedIn ? '已签到' : '未签到' }}</el-tag></template>
       </el-table-column>
       <el-table-column label="活动反馈" width="150">
         <template #default="{ row }">
-          <span v-if="!row.requireFeedback">-</span>
+          <span v-if="row.activityStatus === 'CANCELLED'">活动已取消</span>
+          <span v-else-if="!row.requireFeedback">-</span>
           <span v-else-if="row.activityStatus !== 'ENDED'">活动结束后开放</span>
           <span v-else-if="!row.checkedIn || row.status !== 'REGISTERED'">未签到不可反馈</span>
           <el-button
@@ -108,8 +119,8 @@ onMounted(loadRegistrations)
           >活动反馈</el-button>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110">
-        <template #default="{ row }"><el-button link type="primary" @click="router.push({ name: 'activity-detail', params: { id: row.activityId } })">查看活动</el-button></template>
+      <el-table-column label="操作" min-width="180">
+        <template #default="{ row }"><el-popover v-if="row.activityStatus === 'CANCELLED'" placement="top" width="300" trigger="click"><template #reference><el-button link type="danger">查看取消原因</el-button></template>{{ row.activityCancellationReason ?? '未填写取消原因' }}</el-popover><el-button v-else link type="primary" @click="router.push({ name: 'activity-detail', params: { id: row.activityId } })">查看活动</el-button></template>
       </el-table-column>
     </el-table>
     <el-dialog v-model="feedbackDialogVisible" title="活动反馈" width="min(560px, 92vw)" destroy-on-close>

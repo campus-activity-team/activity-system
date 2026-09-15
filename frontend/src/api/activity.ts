@@ -30,6 +30,14 @@ export function endActivity(id: number) {
   return http.post<ApiEnvelope<Activity>>(`/activities/${id}/end`)
 }
 
+export function withdrawActivityReview(id: number) {
+  return http.post<ApiEnvelope<Activity>>(`/activities/${id}/withdraw`)
+}
+
+export function cancelActivity(id: number, reason: string) {
+  return http.post<ApiEnvelope<Activity>>(`/activities/${id}/cancel`, { reason })
+}
+
 export function deleteActivity(id: number) {
   return http.delete<ApiEnvelope<null>>(`/activities/${id}`)
 }

@@ -20,6 +20,8 @@ const typeLabel: Record<string, string> = {
   ACTIVITY_REJECTED: '审核',
   ACTIVITY_PUBLISHED: '发布',
   ACTIVITY_UNPUBLISHED: '下架',
+  ACTIVITY_CANCELLED: '取消',
+  ACTIVITY_CANCELLED_BY_ADMIN: '取消',
   ORGANIZER_APPLICATION_APPROVED: '权限',
   ORGANIZER_APPLICATION_REJECTED: '权限',
 }
@@ -64,7 +66,9 @@ async function openTarget(notification: NotificationItem) {
     await auth.loadCurrentUser()
   }
   if (notification.targetType === 'ACTIVITY' && notification.targetId) {
-    if (notification.type === 'REGISTRATION_SUCCESS' || notification.type === 'ACTIVITY_START_REMINDER') {
+    if (notification.type === 'ACTIVITY_CANCELLED') {
+      await router.push({ name: 'my-registrations' })
+    } else if (notification.type === 'REGISTRATION_SUCCESS' || notification.type === 'ACTIVITY_START_REMINDER') {
       await router.push({ name: 'activity-detail', params: { id: notification.targetId } })
     } else {
       await router.push({ name: 'organizer-activities' })

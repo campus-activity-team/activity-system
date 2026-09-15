@@ -10,6 +10,7 @@ public record RegistrationView(
         Long activityId,
         String activityTitle,
         ActivityStatus activityStatus,
+        String activityCancellationReason,
         boolean requireFeedback,
         LocalDateTime feedbackDeadline,
         Long userId,

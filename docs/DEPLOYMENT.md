@@ -26,7 +26,7 @@ docker compose logs -f backend
 
 从旧版本数据库升级时需执行一次 `database/migrations/001_add_checkin_location.sql`；全新数据库已由 `database/init.sql` 直接创建这些字段。
 
-旧数据库还需按顺序执行 `database/migrations/002_create_checkin_anomalies.sql`、`database/migrations/003_create_organizer_applications.sql`、`database/migrations/004_create_feedbacks.sql` 和 `database/migrations/005_create_notifications.sql`。
+旧数据库还需按顺序执行 `database/migrations/002_create_checkin_anomalies.sql`、`database/migrations/003_create_organizer_applications.sql`、`database/migrations/004_create_feedbacks.sql`、`database/migrations/005_create_notifications.sql` 和 `database/migrations/006_add_activity_cancellation.sql`。
 
 生产环境不应开放管理员注册。首次部署且数据库中尚无管理员时，可临时设置 `BOOTSTRAP_ADMIN_ENABLED=true`、`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`（至少 12 位）和可选的 `BOOTSTRAP_ADMIN_NAME`；首个管理员创建成功后立即将 `BOOTSTRAP_ADMIN_ENABLED` 改回 `false` 并移除明文密码。后续管理员在“用户与权限”页面将已注册普通账号提升为管理员。
 

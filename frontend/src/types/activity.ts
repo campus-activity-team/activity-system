@@ -30,6 +30,9 @@ export interface Activity {
   reviewComment?: string
   requireFeedback: boolean
   feedbackDeadline?: string
+  cancellationReason?: string
+  cancelledAt?: string
+  cancelledBy?: number
   createdAt: string
   updatedAt: string
 }

@@ -1,13 +1,17 @@
 package com.example.activity.service;
 
 import com.example.activity.dto.ActivityRequest;
+import com.example.activity.dto.CancelActivityRequest;
 import com.example.activity.entity.Activity;
 import com.example.activity.entity.ActivityStatus;
+import com.example.activity.entity.Registration;
+import com.example.activity.entity.RegistrationStatus;
 import com.example.activity.entity.User;
 import com.example.activity.entity.UserRole;
 import com.example.activity.entity.UserStatus;
 import com.example.activity.exception.BusinessException;
 import com.example.activity.mapper.ActivityMapper;
+import com.example.activity.mapper.RegistrationMapper;
 import com.example.activity.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +19,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -28,6 +33,7 @@ import static org.mockito.Mockito.when;
 class ActivityServiceTest {
 
     private ActivityMapper activityMapper;
+    private RegistrationMapper registrationMapper;
     private OperationLogService operationLogService;
     private NotificationService notificationService;
     private ActivityService activityService;
@@ -36,9 +42,10 @@ class ActivityServiceTest {
     @BeforeEach
     void setUp() {
         activityMapper = mock(ActivityMapper.class);
+        registrationMapper = mock(RegistrationMapper.class);
         operationLogService = mock(OperationLogService.class);
         notificationService = mock(NotificationService.class);
-        activityService = new ActivityService(activityMapper, operationLogService, notificationService);
+        activityService = new ActivityService(activityMapper, registrationMapper, operationLogService, notificationService);
         User user = new User();
         user.setId(7L);
         user.setUsername("organizer");
@@ -241,6 +248,77 @@ class ActivityServiceTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> activityService.end(25L, organizerAuthentication)
+        );
+
+        assertEquals(409, exception.getCode());
+    }
+
+    @Test
+    void organizerCanWithdrawPendingReview() {
+        Activity activity = new Activity();
+        activity.setId(28L);
+        activity.setOrganizerId(7L);
+        activity.setStatus(ActivityStatus.PENDING_REVIEW);
+        when(activityMapper.selectById(28L)).thenReturn(activity);
+
+        var result = activityService.withdrawReview(28L, organizerAuthentication);
+
+        assertEquals(ActivityStatus.DRAFT, result.status());
+        verify(activityMapper).updateById(activity);
+        verify(operationLogService).record(7L, "ACTIVITY_REVIEW_WITHDRAWN", "ACTIVITY", 28L);
+    }
+
+    @Test
+    void organizerCancellationNotifiesActiveRegistrations() {
+        Activity activity = new Activity();
+        activity.setId(29L);
+        activity.setOrganizerId(7L);
+        activity.setTitle("校园讲座");
+        activity.setStatus(ActivityStatus.PUBLISHED);
+        activity.setStartTime(LocalDateTime.now().plusDays(1));
+        activity.setEndTime(LocalDateTime.now().plusDays(1).plusHours(2));
+        Registration registered = new Registration();
+        registered.setUserId(8L);
+        registered.setStatus(RegistrationStatus.REGISTERED);
+        Registration cancelled = new Registration();
+        cancelled.setUserId(9L);
+        cancelled.setStatus(RegistrationStatus.CANCELLED);
+        when(activityMapper.selectById(29L)).thenReturn(activity);
+        when(registrationMapper.selectByActivityId(29L)).thenReturn(List.of(registered, cancelled));
+
+        var result = activityService.cancel(
+                29L,
+                new CancelActivityRequest("场地临时关闭"),
+                organizerAuthentication
+        );
+
+        assertEquals(ActivityStatus.CANCELLED, result.status());
+        assertEquals("场地临时关闭", result.cancellationReason());
+        assertEquals(7L, result.cancelledBy());
+        verify(operationLogService).record(7L, "ACTIVITY_CANCELLED", "ACTIVITY", 29L);
+        verify(notificationService).createDeduplicated(
+                8L,
+                "ACTIVITY_CANCELLED",
+                "活动已取消",
+                "你报名的“校园讲座”已取消。原因：场地临时关闭",
+                "ACTIVITY",
+                29L,
+                "activity-cancelled:29:8"
+        );
+    }
+
+    @Test
+    void cannotCancelEndedActivity() {
+        Activity activity = new Activity();
+        activity.setId(30L);
+        activity.setOrganizerId(7L);
+        activity.setStatus(ActivityStatus.ENDED);
+        activity.setEndTime(LocalDateTime.now().minusHours(1));
+        when(activityMapper.selectById(30L)).thenReturn(activity);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> activityService.cancel(30L, new CancelActivityRequest("测试"), organizerAuthentication)
         );
 
         assertEquals(409, exception.getCode());

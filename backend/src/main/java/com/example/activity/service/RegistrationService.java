@@ -214,6 +214,7 @@ public class RegistrationService {
                 activity.getId(),
                 activity.getTitle(),
                 ActivityStatusResolver.resolve(activity, LocalDateTime.now()),
+                activity.getCancellationReason(),
                 Boolean.TRUE.equals(activity.getRequireFeedback()),
                 activity.getFeedbackDeadline(),
                 user.getId(),

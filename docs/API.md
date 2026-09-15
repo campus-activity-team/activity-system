@@ -61,6 +61,8 @@
 - `POST /api/activities/{id}/submit`：提交管理员审核
 - `POST /api/activities/{id}/start`：组织者或管理员手动开启已发布活动，立即进入 `ONGOING` 状态
 - `POST /api/activities/{id}/end`：组织者或管理员手动结束进行中活动，立即进入 `ENDED` 状态
+- `POST /api/activities/{id}/withdraw`：活动发起者或管理员将审核中的活动撤回为草稿
+- `POST /api/activities/{id}/cancel`：活动发起者或管理员填写原因取消待发布、已发布或进行中的活动
 - `GET /api/admin/reviews`：管理员查看待审核活动
 - `POST /api/admin/activities/{id}/approve`：管理员通过审核
 - `POST /api/admin/activities/{id}/reject`：管理员驳回活动
@@ -68,6 +70,8 @@
 - `POST /api/admin/activities/{id}/unpublish`：管理员下架已发布或进行中活动
 
 活动状态会由后台定时任务根据开始和结束时间自动从 `PUBLISHED` 推进至 `ONGOING` 或 `ENDED`；公开、管理、报名和签到接口读取时也会即时校正过期状态，避免定时任务间隔造成显示延迟。组织者或管理员也可以手动开启尚未结束的已发布活动，或提前结束进行中的活动；自动状态推进仍作为兜底。手动开启和结束都会写入操作日志。
+
+审核中的活动可以由发起者撤回并恢复为草稿。待发布、已发布和进行中的活动可填写原因取消，已结束活动不能取消；取消后停止报名与签到，保留原报名记录供参与者查看，并向全部有效报名者发送站内通知。管理员取消其他发起者的活动时，发起者也会收到通知。撤回和取消均写入操作日志。
 
 公开活动只返回 `PUBLISHED`、`ONGOING`、`ENDED`，草稿、审核中、已驳回、待发布和已取消活动不会出现在公开列表或详情中。前端会根据报名起止时间显示“报名未开始”“报名中”或“报名已截止”，不会将所有已发布活动都显示为报名中。
 

@@ -31,6 +31,9 @@ public class Activity {
     private String reviewComment;
     private Boolean requireFeedback;
     private LocalDateTime feedbackDeadline;
+    private String cancellationReason;
+    private LocalDateTime cancelledAt;
+    private Long cancelledBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

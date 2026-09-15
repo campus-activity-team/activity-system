@@ -2,6 +2,7 @@ package com.example.activity.controller;
 
 import com.example.activity.common.ApiResponse;
 import com.example.activity.dto.ActivityRequest;
+import com.example.activity.dto.CancelActivityRequest;
 import com.example.activity.entity.ActivityStatus;
 import com.example.activity.service.ActivityService;
 import com.example.activity.vo.ActivityView;
@@ -85,5 +86,21 @@ public class ActivityController {
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ApiResponse<ActivityView> end(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(activityService.end(id, authentication));
+    }
+
+    @PostMapping("/{id}/withdraw")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    public ApiResponse<ActivityView> withdraw(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(activityService.withdrawReview(id, authentication));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    public ApiResponse<ActivityView> cancel(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelActivityRequest request,
+            Authentication authentication
+    ) {
+        return ApiResponse.success(activityService.cancel(id, request, authentication));
     }
 }

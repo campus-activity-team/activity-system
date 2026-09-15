@@ -57,9 +57,13 @@ CREATE TABLE IF NOT EXISTS activities (
   review_comment VARCHAR(1000),
   require_feedback BOOLEAN NOT NULL DEFAULT FALSE,
   feedback_deadline DATETIME,
+  cancellation_reason VARCHAR(500),
+  cancelled_at DATETIME,
+  cancelled_by BIGINT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_activities_organizer FOREIGN KEY (organizer_id) REFERENCES users (id),
+  CONSTRAINT fk_activities_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users (id),
   CONSTRAINT chk_activity_capacity CHECK (capacity > 0),
   INDEX idx_activities_status_time (status, start_time),
   INDEX idx_activities_organizer (organizer_id)

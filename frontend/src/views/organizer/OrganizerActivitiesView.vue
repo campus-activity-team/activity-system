@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
-import { createActivity, deleteActivity, endActivity, getMyActivities, startActivity, submitActivity, updateActivity } from '../../api/activity'
+import { cancelActivity, createActivity, deleteActivity, endActivity, getMyActivities, startActivity, submitActivity, updateActivity, withdrawActivityReview } from '../../api/activity'
 import { generateActivityCopy } from '../../api/ai'
 import { getActivityFeedbackDashboard } from '../../api/feedback'
 import { cancelParticipantAttendance, exportActivityRoster, getActivityAttendances, getActivityCheckinAnomalies, getActivityRegistrations, issueCheckinToken, manualCheckinParticipant } from '../../api/registration'
@@ -73,6 +73,7 @@ const statusLabel: Record<string, string> = {
   PUBLISHED: '已发布',
   ONGOING: '进行中',
   ENDED: '已结束',
+  CANCELLED: '已取消',
 }
 
 const anomalyReasonLabel: Record<CheckinAnomalyReason, string> = {
@@ -173,6 +174,36 @@ async function submitForReview(id: number) {
     await loadActivities()
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message ?? '提交失败')
+  }
+}
+
+async function withdrawReviewNow(id: number) {
+  try {
+    await ElMessageBox.confirm('撤回后活动将恢复为草稿，可修改后重新提交审核。', '撤回审核', { type: 'warning' })
+    await withdrawActivityReview(id)
+    ElMessage.success('审核已撤回')
+    await loadActivities()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '撤回失败')
+  }
+}
+
+async function cancelActivityNow(activity: Activity) {
+  try {
+    const result = await ElMessageBox.prompt('请输入取消原因，所有已报名用户都会收到通知。', `取消“${activity.title}”`, {
+      type: 'warning',
+      inputPattern: /\S+/,
+      inputErrorMessage: '取消原因不能为空',
+      inputPlaceholder: '例如：因场地临时调整，活动取消',
+    })
+    await cancelActivity(activity.id, result.value.trim())
+    ElMessage.success('活动已取消并通知报名者')
+    await loadActivities()
+    if (detailActivity.value?.id === activity.id) {
+      detailActivity.value = activities.value.find((item) => item.id === activity.id) ?? null
+    }
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '取消活动失败')
   }
 }
 
@@ -476,7 +507,7 @@ onUnmounted(() => {
       <el-table-column prop="title" label="活动名称" min-width="180" />
       <el-table-column prop="status" label="状态" width="110"><template #default="{ row }"><el-tag>{{ statusLabel[row.status] ?? row.status }}</el-tag></template></el-table-column>
       <el-table-column prop="capacity" label="容量" width="90" />
-      <el-table-column label="操作" min-width="420"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'PUBLISHED'" link type="success" @click="startActivityNow(row.id)">手动开启</el-button><el-button v-if="row.status === 'ONGOING'" link type="warning" @click="endActivityNow(row.id)">立即结束</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="480"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'PUBLISHED'" link type="success" @click="startActivityNow(row.id)">手动开启</el-button><el-button v-if="row.status === 'ONGOING'" link type="warning" @click="endActivityNow(row.id)">立即结束</el-button><el-button v-if="row.status === 'PENDING_REVIEW'" link type="warning" @click="withdrawReviewNow(row.id)">撤回审核</el-button><el-button v-if="row.status === 'APPROVED' || row.status === 'PUBLISHED' || row.status === 'ONGOING'" link type="danger" @click="cancelActivityNow(row)">取消活动</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
     </el-table>
     <el-dialog v-model="aiDialogVisible" title="DeepSeek AI 活动文案助手" width="min(720px, 92vw)" destroy-on-close>
       <el-alert title="AI 生成内容仅作为草稿，不会自动保存或提交审核，请在应用后人工检查。" type="info" :closable="false" show-icon />
@@ -521,6 +552,7 @@ onUnmounted(() => {
           <el-descriptions-item label="报名情况">{{ detailActivity.currentRegisteredCount }} / {{ detailActivity.capacity }}</el-descriptions-item>
           <el-descriptions-item label="活动时间" :span="2">{{ detailActivity.startTime.replace('T', ' ').slice(0, 16) }} 至 {{ detailActivity.endTime.replace('T', ' ').slice(0, 16) }}</el-descriptions-item>
           <el-descriptions-item v-if="detailActivity.requireFeedback" label="反馈截止" :span="2">{{ formatTime(detailActivity.feedbackDeadline) }}</el-descriptions-item>
+          <el-descriptions-item v-if="detailActivity.status === 'CANCELLED'" label="取消原因" :span="2">{{ detailActivity.cancellationReason }}</el-descriptions-item>
         </el-descriptions>
         <h3>活动介绍</h3>
         <p class="detail-description">{{ detailActivity.description }}</p>

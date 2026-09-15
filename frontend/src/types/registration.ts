@@ -5,6 +5,7 @@ export interface Registration {
   activityId: number
   activityTitle: string
   activityStatus: import('./activity').ActivityStatus
+  activityCancellationReason?: string
   requireFeedback: boolean
   feedbackDeadline?: string
   userId: number

@@ -27,6 +27,9 @@ public record ActivityView(
         String reviewComment,
         Boolean requireFeedback,
         LocalDateTime feedbackDeadline,
+        String cancellationReason,
+        LocalDateTime cancelledAt,
+        Long cancelledBy,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -67,6 +70,9 @@ public record ActivityView(
                 activity.getReviewComment(),
                 activity.getRequireFeedback(),
                 activity.getFeedbackDeadline(),
+                activity.getCancellationReason(),
+                activity.getCancelledAt(),
+                activity.getCancelledBy(),
                 activity.getCreatedAt(),
                 activity.getUpdatedAt()
         );
