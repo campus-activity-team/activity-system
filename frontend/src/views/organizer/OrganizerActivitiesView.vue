@@ -3,10 +3,12 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { cancelActivity, createActivity, deleteActivity, endActivity, getMyActivities, startActivity, submitActivity, updateActivity, withdrawActivityReview } from '../../api/activity'
+import { getActivityAnnouncements, publishActivityAnnouncement } from '../../api/announcement'
 import { generateActivityCopy } from '../../api/ai'
 import { getActivityFeedbackDashboard } from '../../api/feedback'
 import { cancelParticipantAttendance, exportActivityRoster, getActivityAttendances, getActivityCheckinAnomalies, getActivityRegistrations, issueCheckinToken, manualCheckinParticipant } from '../../api/registration'
 import type { Activity, ActivityPayload } from '../../types/activity'
+import type { ActivityAnnouncement } from '../../types/announcement'
 import type { ActivityCopyRequest, ActivityCopyResponse } from '../../types/ai'
 import type { FeedbackDashboard } from '../../types/feedback'
 import type { Attendance, CheckinAnomaly, CheckinAnomalyReason, CheckinToken, Registration } from '../../types/registration'
@@ -38,6 +40,10 @@ const detailRegistrations = ref<Registration[]>([])
 const detailAttendances = ref<Attendance[]>([])
 const detailCheckinAnomalies = ref<CheckinAnomaly[]>([])
 const detailFeedbackDashboard = ref<FeedbackDashboard | null>(null)
+const detailAnnouncements = ref<ActivityAnnouncement[]>([])
+const announcementTitle = ref('')
+const announcementContent = ref('')
+const announcementPublishing = ref(false)
 const detailLoading = ref(false)
 const exportingRoster = ref(false)
 const attendanceChangingUserId = ref<number | null>(null)
@@ -245,21 +251,46 @@ async function loadActivityDetailData(showLoading: boolean) {
   if (!detailActivity.value) return
   if (showLoading) detailLoading.value = true
   try {
-    const [registrationResponse, attendanceResponse, anomalyResponse, feedbackResponse] = await Promise.all([
+    const [registrationResponse, attendanceResponse, anomalyResponse, feedbackResponse, announcementResponse] = await Promise.all([
       getActivityRegistrations(detailActivity.value.id),
       getActivityAttendances(detailActivity.value.id),
       getActivityCheckinAnomalies(detailActivity.value.id),
       getActivityFeedbackDashboard(detailActivity.value.id),
+      getActivityAnnouncements(detailActivity.value.id),
     ])
     detailRegistrations.value = registrationResponse.data.data
     detailAttendances.value = attendanceResponse.data.data
     detailCheckinAnomalies.value = anomalyResponse.data.data
     detailFeedbackDashboard.value = feedbackResponse.data.data
+    detailAnnouncements.value = announcementResponse.data.data
     attendanceSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (error: any) {
     if (showLoading) ElMessage.error(error?.response?.data?.message ?? '活动详情加载失败')
   } finally {
     if (showLoading) detailLoading.value = false
+  }
+}
+
+async function publishAnnouncement() {
+  if (!detailActivity.value) return
+  if (!announcementTitle.value.trim() || !announcementContent.value.trim()) {
+    ElMessage.warning('请填写公告标题和内容')
+    return
+  }
+  announcementPublishing.value = true
+  try {
+    await publishActivityAnnouncement(detailActivity.value.id, {
+      title: announcementTitle.value.trim(),
+      content: announcementContent.value.trim(),
+    })
+    announcementTitle.value = ''
+    announcementContent.value = ''
+    await loadActivityDetailData(false)
+    ElMessage.success('公告已发布，报名者将收到通知')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message ?? '公告发布失败')
+  } finally {
+    announcementPublishing.value = false
   }
 }
 
@@ -396,6 +427,9 @@ function closeDetailDialog() {
   checkinToken.value = null
   checkinQrCode.value = ''
   detailFeedbackDashboard.value = null
+  detailAnnouncements.value = []
+  announcementTitle.value = ''
+  announcementContent.value = ''
   tokenCountdown.value = 0
   if (tokenTimer) {
     clearInterval(tokenTimer)
@@ -556,6 +590,31 @@ onUnmounted(() => {
         </el-descriptions>
         <h3>活动介绍</h3>
         <p class="detail-description">{{ detailActivity.description }}</p>
+        <el-card shadow="never" class="announcement-card">
+          <template #header>
+            <div class="announcement-card-header">
+              <strong>活动公告</strong>
+              <small>{{ detailActivity.status === 'PUBLISHED' || detailActivity.status === 'ONGOING' ? '发布后，当前已报名用户会收到站内通知' : '历史公告' }}</small>
+            </div>
+          </template>
+          <el-form v-if="detailActivity.status === 'PUBLISHED' || detailActivity.status === 'ONGOING'" label-position="top" @submit.prevent="publishAnnouncement">
+            <el-form-item label="公告标题" required>
+              <el-input v-model="announcementTitle" maxlength="120" show-word-limit placeholder="例如：活动地点临时调整" />
+            </el-form-item>
+            <el-form-item label="公告内容" required>
+              <el-input v-model="announcementContent" type="textarea" :rows="3" maxlength="2000" show-word-limit placeholder="请输入需要通知报名者的更新内容" />
+            </el-form-item>
+            <el-button type="primary" :loading="announcementPublishing" @click="publishAnnouncement">发布公告</el-button>
+          </el-form>
+          <el-divider content-position="left">历史公告</el-divider>
+          <el-empty v-if="detailAnnouncements.length === 0" description="暂无公告" :image-size="60" />
+          <div v-else class="announcement-history">
+            <div v-for="announcement in detailAnnouncements" :key="announcement.id" class="announcement-item">
+              <div class="announcement-item-heading"><strong>{{ announcement.title }}</strong><small>{{ formatTime(announcement.createdAt) }} · {{ announcement.publisherName || '系统管理员' }}</small></div>
+              <p>{{ announcement.content }}</p>
+            </div>
+          </div>
+        </el-card>
         <div v-if="detailActivity.status === 'ONGOING'" class="checkin-token-box">
           <div class="page-heading"><div><h3>动态签到二维码</h3><p>二维码每 60 秒自动刷新，参会者扫码后会自动打开签到页面并完成签到。</p></div><el-button type="primary" @click="refreshCheckinToken">{{ checkinQrCode ? '立即刷新' : '生成二维码' }}</el-button></div>
           <div class="checkin-network-config">

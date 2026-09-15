@@ -16,6 +16,7 @@ import com.example.activity.mapper.ActivityMapper;
 import com.example.activity.mapper.AttendanceMapper;
 import com.example.activity.mapper.FeedbackMapper;
 import com.example.activity.mapper.RegistrationMapper;
+import com.example.activity.mapper.UserMapper;
 import com.example.activity.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class FeedbackServiceTest {
     private RegistrationMapper registrationMapper;
     private AttendanceMapper attendanceMapper;
     private FeedbackMapper feedbackMapper;
+    private UserMapper userMapper;
+    private NotificationService notificationService;
+    private OperationLogService operationLogService;
     private FeedbackService feedbackService;
     private Activity activity;
     private User participant;
@@ -51,12 +55,19 @@ class FeedbackServiceTest {
         registrationMapper = mock(RegistrationMapper.class);
         attendanceMapper = mock(AttendanceMapper.class);
         feedbackMapper = mock(FeedbackMapper.class);
+        userMapper = mock(UserMapper.class);
+        notificationService = mock(NotificationService.class);
+        operationLogService = mock(OperationLogService.class);
         feedbackService = new FeedbackService(
                 activityMapper,
                 registrationMapper,
                 attendanceMapper,
-                feedbackMapper
+                feedbackMapper,
+                userMapper,
+                notificationService,
+                operationLogService
         );
+        when(userMapper.selectList(any())).thenReturn(List.of());
 
         activity = new Activity();
         activity.setId(11L);
@@ -98,6 +109,36 @@ class FeedbackServiceTest {
         assertEquals(20L, result.id());
         assertEquals(5, result.overallRating());
         verify(feedbackMapper).insert(any(Feedback.class));
+    }
+
+    @Test
+    void notifiesOrganizerAndActiveAdminsAfterFeedbackSubmission() {
+        when(userMapper.selectList(any())).thenReturn(List.of(user(1L, UserRole.ADMIN)));
+        when(feedbackMapper.insert(any(Feedback.class))).thenAnswer(invocation -> {
+            Feedback feedback = invocation.getArgument(0);
+            feedback.setId(20L);
+            return 1;
+        });
+
+        feedbackService.submit(11L, request(), participantAuthentication);
+
+        verify(notificationService).create(
+                7L,
+                "ACTIVITY_FEEDBACK_SUBMITTED",
+                "收到活动反馈",
+                "“往期活动”收到一份新的匿名反馈，总体评分 5/5。请在活动管理中查看最新统计。",
+                "ACTIVITY",
+                11L
+        );
+        verify(notificationService).create(
+                1L,
+                "ACTIVITY_FEEDBACK_SUBMITTED",
+                "收到活动反馈",
+                "“往期活动”收到一份新的匿名反馈，总体评分 5/5。请在活动管理中查看最新统计。",
+                "ACTIVITY",
+                11L
+        );
+        verify(operationLogService).record(8L, "ACTIVITY_FEEDBACK_SUBMITTED", "ACTIVITY", 11L);
     }
 
     @Test

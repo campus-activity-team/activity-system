@@ -211,6 +211,41 @@ body {
   gap: 16px;
 }
 
+.announcement-card {
+  margin: 22px 0;
+}
+
+.announcement-card-header,
+.announcement-item-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.announcement-card-header small,
+.announcement-item-heading small {
+  color: #6b7280;
+}
+
+.announcement-history {
+  display: grid;
+  gap: 14px;
+}
+
+.announcement-item {
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.announcement-item p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
 .form-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -522,6 +557,7 @@ body {
   margin: 8px 0;
   color: #475569;
   line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .notification-content small {

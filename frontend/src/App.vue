@@ -21,7 +21,7 @@ onMounted(() => {
   void auth.loadCurrentUser()
   notificationTimer = setInterval(() => {
     if (auth.isAuthenticated) void notifications.refreshUnreadCount()
-  }, 60_000)
+  }, 5_000)
 })
 
 onUnmounted(() => {

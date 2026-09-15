@@ -22,6 +22,8 @@ const typeLabel: Record<string, string> = {
   ACTIVITY_UNPUBLISHED: '下架',
   ACTIVITY_CANCELLED: '取消',
   ACTIVITY_CANCELLED_BY_ADMIN: '取消',
+  ACTIVITY_ANNOUNCEMENT: '公告',
+  ACTIVITY_FEEDBACK_SUBMITTED: '反馈',
   ORGANIZER_APPLICATION_APPROVED: '权限',
   ORGANIZER_APPLICATION_REJECTED: '权限',
 }
@@ -68,7 +70,7 @@ async function openTarget(notification: NotificationItem) {
   if (notification.targetType === 'ACTIVITY' && notification.targetId) {
     if (notification.type === 'ACTIVITY_CANCELLED') {
       await router.push({ name: 'my-registrations' })
-    } else if (notification.type === 'REGISTRATION_SUCCESS' || notification.type === 'ACTIVITY_START_REMINDER') {
+    } else if (notification.type === 'REGISTRATION_SUCCESS' || notification.type === 'ACTIVITY_START_REMINDER' || notification.type === 'ACTIVITY_ANNOUNCEMENT') {
       await router.push({ name: 'activity-detail', params: { id: notification.targetId } })
     } else {
       await router.push({ name: 'organizer-activities' })
@@ -93,7 +95,7 @@ onMounted(loadNotifications)
 <template>
   <div class="page-card">
     <div class="page-heading">
-      <div><h2>通知中心</h2><p>查看报名结果、审核结果和活动开始提醒。</p></div>
+      <div><h2>通知中心</h2><p>查看报名结果、审核结果、活动公告和开始提醒。</p></div>
       <div class="notification-actions"><el-button @click="loadNotifications">刷新</el-button><el-button type="primary" :disabled="notificationStore.unreadCount === 0" @click="markAllRead">全部已读</el-button></div>
     </div>
     <el-empty v-if="!loading && notifications.length === 0" description="暂无通知" />

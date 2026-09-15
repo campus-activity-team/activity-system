@@ -1,5 +1,6 @@
 package com.example.activity.service;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.activity.dto.FeedbackRequest;
 import com.example.activity.entity.Activity;
 import com.example.activity.entity.ActivityStatus;
@@ -10,11 +11,13 @@ import com.example.activity.entity.Registration;
 import com.example.activity.entity.RegistrationStatus;
 import com.example.activity.entity.User;
 import com.example.activity.entity.UserRole;
+import com.example.activity.entity.UserStatus;
 import com.example.activity.exception.BusinessException;
 import com.example.activity.mapper.ActivityMapper;
 import com.example.activity.mapper.AttendanceMapper;
 import com.example.activity.mapper.FeedbackMapper;
 import com.example.activity.mapper.RegistrationMapper;
+import com.example.activity.mapper.UserMapper;
 import com.example.activity.security.AuthenticatedUser;
 import com.example.activity.vo.FeedbackDashboardView;
 import com.example.activity.vo.FeedbackStatusView;
@@ -36,17 +39,26 @@ public class FeedbackService {
     private final RegistrationMapper registrationMapper;
     private final AttendanceMapper attendanceMapper;
     private final FeedbackMapper feedbackMapper;
+    private final UserMapper userMapper;
+    private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     public FeedbackService(
             ActivityMapper activityMapper,
             RegistrationMapper registrationMapper,
             AttendanceMapper attendanceMapper,
-            FeedbackMapper feedbackMapper
+            FeedbackMapper feedbackMapper,
+            UserMapper userMapper,
+            NotificationService notificationService,
+            OperationLogService operationLogService
     ) {
         this.activityMapper = activityMapper;
         this.registrationMapper = registrationMapper;
         this.attendanceMapper = attendanceMapper;
         this.feedbackMapper = feedbackMapper;
+        this.userMapper = userMapper;
+        this.notificationService = notificationService;
+        this.operationLogService = operationLogService;
     }
 
     public FeedbackStatusView mine(Long activityId, Authentication authentication) {
@@ -96,7 +108,34 @@ public class FeedbackService {
             applyRequest(feedback, request);
             feedbackMapper.updateById(feedback);
         }
+        notifyFeedbackRecipients(activity, user, feedback);
+        operationLogService.record(user.getId(), "ACTIVITY_FEEDBACK_SUBMITTED", "ACTIVITY", activityId);
         return toView(feedback, activity);
+    }
+
+    private void notifyFeedbackRecipients(Activity activity, User participant, Feedback feedback) {
+        String content = "“" + activity.getTitle() + "”收到一份新的匿名反馈，总体评分 "
+                + feedback.getOverallRating() + "/5。请在活动管理中查看最新统计。";
+        java.util.LinkedHashSet<Long> recipientIds = new java.util.LinkedHashSet<>();
+        if (activity.getOrganizerId() != null) {
+            recipientIds.add(activity.getOrganizerId());
+        }
+        userMapper.selectList(Wrappers.<User>lambdaQuery()
+                        .eq(User::getRole, UserRole.ADMIN)
+                        .eq(User::getStatus, UserStatus.ACTIVE))
+                .stream()
+                .map(User::getId)
+                .forEach(recipientIds::add);
+        recipientIds.stream()
+                .filter(recipientId -> !recipientId.equals(participant.getId()))
+                .forEach(recipientId -> notificationService.create(
+                        recipientId,
+                        "ACTIVITY_FEEDBACK_SUBMITTED",
+                        "收到活动反馈",
+                        content,
+                        "ACTIVITY",
+                        activity.getId()
+                ));
     }
 
     public FeedbackDashboardView dashboard(Long activityId, Authentication authentication) {
