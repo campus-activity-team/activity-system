@@ -28,13 +28,15 @@ import static org.mockito.Mockito.when;
 class ActivityServiceTest {
 
     private ActivityMapper activityMapper;
+    private OperationLogService operationLogService;
     private ActivityService activityService;
     private Authentication organizerAuthentication;
 
     @BeforeEach
     void setUp() {
         activityMapper = mock(ActivityMapper.class);
-        activityService = new ActivityService(activityMapper);
+        operationLogService = mock(OperationLogService.class);
+        activityService = new ActivityService(activityMapper, operationLogService);
         User user = new User();
         user.setId(7L);
         user.setUsername("organizer");
@@ -149,6 +151,65 @@ class ActivityServiceTest {
 
         assertEquals(ActivityStatus.ONGOING, result.status());
         verify(activityMapper).updateById(activity);
+        verify(operationLogService).record(7L, "ACTIVITY_MANUALLY_STARTED", "ACTIVITY", 22L);
+    }
+
+    @Test
+    void organizerCanManuallyEndOngoingActivity() {
+        Activity activity = new Activity();
+        activity.setId(24L);
+        activity.setOrganizerId(7L);
+        activity.setStatus(ActivityStatus.ONGOING);
+        activity.setEndTime(LocalDateTime.now().plusHours(2));
+        when(activityMapper.selectById(24L)).thenReturn(activity);
+
+        var result = activityService.end(24L, organizerAuthentication);
+
+        assertEquals(ActivityStatus.ENDED, result.status());
+        verify(activityMapper).updateById(activity);
+        verify(operationLogService).record(7L, "ACTIVITY_MANUALLY_ENDED", "ACTIVITY", 24L);
+    }
+
+    @Test
+    void adminCanManuallyEndAnotherOrganizersActivity() {
+        User admin = new User();
+        admin.setId(1L);
+        admin.setUsername("admin");
+        admin.setName("管理员");
+        admin.setRole(UserRole.ADMIN);
+        admin.setStatus(UserStatus.ACTIVE);
+        Authentication adminAuthentication = new UsernamePasswordAuthenticationToken(
+                AuthenticatedUser.from(admin), null, AuthenticatedUser.from(admin).getAuthorities()
+        );
+        Activity activity = new Activity();
+        activity.setId(26L);
+        activity.setOrganizerId(99L);
+        activity.setStatus(ActivityStatus.ONGOING);
+        activity.setEndTime(LocalDateTime.now().plusHours(2));
+        when(activityMapper.selectById(26L)).thenReturn(activity);
+
+        var result = activityService.end(26L, adminAuthentication);
+
+        assertEquals(ActivityStatus.ENDED, result.status());
+        verify(activityMapper).updateById(activity);
+        verify(operationLogService).record(1L, "ACTIVITY_MANUALLY_ENDED", "ACTIVITY", 26L);
+    }
+
+    @Test
+    void cannotManuallyEndActivityBeforeItStarts() {
+        Activity activity = new Activity();
+        activity.setId(25L);
+        activity.setOrganizerId(7L);
+        activity.setStatus(ActivityStatus.PUBLISHED);
+        activity.setEndTime(LocalDateTime.now().plusHours(2));
+        when(activityMapper.selectById(25L)).thenReturn(activity);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> activityService.end(25L, organizerAuthentication)
+        );
+
+        assertEquals(409, exception.getCode());
     }
 
     private ActivityRequest validRequest() {

@@ -4,6 +4,9 @@ export interface Registration {
   id: number
   activityId: number
   activityTitle: string
+  activityStatus: import('./activity').ActivityStatus
+  requireFeedback: boolean
+  feedbackDeadline?: string
   userId: number
   username: string
   name: string
@@ -13,6 +16,7 @@ export interface Registration {
   cancelledAt?: string
   checkedIn: boolean
   checkinTime?: string
+  checkinMethod?: string
 }
 
 export interface CheckinToken {

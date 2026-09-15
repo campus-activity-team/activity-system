@@ -17,6 +17,7 @@ import com.example.activity.exception.BusinessException;
 import com.example.activity.mapper.ActivityMapper;
 import com.example.activity.mapper.AttendanceMapper;
 import com.example.activity.mapper.CheckinTokenMapper;
+import com.example.activity.mapper.FeedbackMapper;
 import com.example.activity.mapper.RegistrationMapper;
 import com.example.activity.mapper.UserMapper;
 import com.example.activity.security.AuthenticatedUser;
@@ -46,6 +47,8 @@ public class CheckinService {
     private final AttendanceMapper attendanceMapper;
     private final UserMapper userMapper;
     private final CheckinAnomalyService checkinAnomalyService;
+    private final FeedbackMapper feedbackMapper;
+    private final OperationLogService operationLogService;
 
     public CheckinService(
             ActivityMapper activityMapper,
@@ -53,7 +56,9 @@ public class CheckinService {
             RegistrationMapper registrationMapper,
             AttendanceMapper attendanceMapper,
             UserMapper userMapper,
-            CheckinAnomalyService checkinAnomalyService
+            CheckinAnomalyService checkinAnomalyService,
+            FeedbackMapper feedbackMapper,
+            OperationLogService operationLogService
     ) {
         this.activityMapper = activityMapper;
         this.checkinTokenMapper = checkinTokenMapper;
@@ -61,6 +66,8 @@ public class CheckinService {
         this.attendanceMapper = attendanceMapper;
         this.userMapper = userMapper;
         this.checkinAnomalyService = checkinAnomalyService;
+        this.feedbackMapper = feedbackMapper;
+        this.operationLogService = operationLogService;
     }
 
     @Transactional
@@ -152,6 +159,59 @@ public class CheckinService {
                 .toList();
     }
 
+    @Transactional
+    public AttendanceView manualCheckin(Long activityId, Long userId, Authentication authentication) {
+        Activity activity = requiredActivity(activityId);
+        User manager = currentUser(authentication);
+        ensureCanManage(activity, manager);
+        ensureManualManagementOpen(activity);
+        Registration registration = registrationMapper.selectByActivityAndUser(activityId, userId);
+        if (registration == null || registration.getStatus() != RegistrationStatus.REGISTERED) {
+            throw new BusinessException(409, "只能为有效报名用户补签");
+        }
+        User participant = userMapper.selectById(userId);
+        if (participant == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+
+        Attendance existing = attendanceMapper.selectByActivityAndUser(activityId, userId);
+        if (existing != null && existing.getStatus() == AttendanceStatus.SUCCESS) {
+            return toView(existing, activity, participant);
+        }
+        Attendance attendance = existing == null ? new Attendance() : existing;
+        attendance.setActivityId(activityId);
+        attendance.setUserId(userId);
+        attendance.setRegistrationId(registration.getId());
+        attendance.setCheckinTime(LocalDateTime.now());
+        attendance.setCheckinMethod(CheckinMethod.MANUAL);
+        attendance.setStatus(AttendanceStatus.SUCCESS);
+        if (existing == null) {
+            attendanceMapper.insert(attendance);
+        } else {
+            attendanceMapper.updateById(attendance);
+        }
+        operationLogService.record(manager.getId(), "ATTENDANCE_MANUAL_CHECKIN", "ATTENDANCE", attendance.getId());
+        return toView(attendance, activity, participant);
+    }
+
+    @Transactional
+    public void cancelAttendance(Long activityId, Long userId, Authentication authentication) {
+        Activity activity = requiredActivity(activityId);
+        User manager = currentUser(authentication);
+        ensureCanManage(activity, manager);
+        ensureManualManagementOpen(activity);
+        Attendance attendance = attendanceMapper.selectByActivityAndUser(activityId, userId);
+        if (attendance == null || attendance.getStatus() != AttendanceStatus.SUCCESS) {
+            throw new BusinessException(409, "该用户当前没有有效签到记录");
+        }
+        if (feedbackMapper.selectByActivityAndUser(activityId, userId) != null) {
+            throw new BusinessException(409, "该用户已提交活动反馈，不能撤销签到");
+        }
+        attendance.setStatus(AttendanceStatus.CANCELLED);
+        attendanceMapper.updateById(attendance);
+        operationLogService.record(manager.getId(), "ATTENDANCE_CANCELLED", "ATTENDANCE", attendance.getId());
+    }
+
     private String randomToken() {
         byte[] bytes = new byte[24];
         secureRandom.nextBytes(bytes);
@@ -240,8 +300,19 @@ public class CheckinService {
 
     private void ensureCanManage(Activity activity, Authentication authentication) {
         User user = currentUser(authentication);
+        ensureCanManage(activity, user);
+    }
+
+    private void ensureCanManage(Activity activity, User user) {
         if (user.getRole() != UserRole.ADMIN && !user.getId().equals(activity.getOrganizerId())) {
             throw new BusinessException(403, "不能管理其他组织者的签到");
+        }
+    }
+
+    private void ensureManualManagementOpen(Activity activity) {
+        ActivityStatus status = ActivityStatusResolver.resolve(activity, LocalDateTime.now());
+        if (status != ActivityStatus.ONGOING && status != ActivityStatus.ENDED) {
+            throw new BusinessException(409, "只有进行中或已结束的活动可以手动调整签到");
         }
     }
 

@@ -26,10 +26,10 @@ onMounted(checkBackend)
     <template #header>
       <div class="card-title">高校活动报名与签到系统</div>
     </template>
-    <p>活动报名、扫码签到和身份审批流程已接入。当前登录用户：{{ auth.user?.name }}（{{ auth.user?.role }}）</p>
+    <p>活动报名、扫码签到、身份审批和活动反馈流程已接入。当前登录用户：{{ auth.user?.name }}（{{ auth.user?.role }}）</p>
     <el-descriptions :column="1" border>
       <el-descriptions-item label="后端状态">{{ backendStatus }}</el-descriptions-item>
-      <el-descriptions-item label="当前阶段">活动管理、报名签到、异常记录和身份权限审批</el-descriptions-item>
+      <el-descriptions-item label="当前阶段">活动管理、报名签到、身份权限审批、反馈评分与统计</el-descriptions-item>
     </el-descriptions>
     <div class="actions">
       <el-button type="primary" @click="checkBackend">重新检查后端</el-button>

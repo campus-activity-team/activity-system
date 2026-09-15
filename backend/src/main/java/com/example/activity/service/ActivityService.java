@@ -22,9 +22,11 @@ import java.util.List;
 public class ActivityService {
 
     private final ActivityMapper activityMapper;
+    private final OperationLogService operationLogService;
 
-    public ActivityService(ActivityMapper activityMapper) {
+    public ActivityService(ActivityMapper activityMapper, OperationLogService operationLogService) {
         this.activityMapper = activityMapper;
+        this.operationLogService = operationLogService;
     }
 
     @Transactional
@@ -182,13 +184,25 @@ public class ActivityService {
     @Transactional
     public ActivityView start(Long id, Authentication authentication) {
         Activity activity = getRequired(id);
-        ensureCanManage(activity, authentication);
+        AuthenticatedUser manager = ensureCanManage(activity, authentication);
         ensureStatus(activity, ActivityStatus.PUBLISHED);
         if (activity.getEndTime() == null || !activity.getEndTime().isAfter(LocalDateTime.now())) {
             throw new BusinessException(409, "活动已经结束，不能开启");
         }
         activity.setStatus(ActivityStatus.ONGOING);
         activityMapper.updateById(activity);
+        operationLogService.record(manager.user().getId(), "ACTIVITY_MANUALLY_STARTED", "ACTIVITY", activity.getId());
+        return ActivityView.from(activity);
+    }
+
+    @Transactional
+    public ActivityView end(Long id, Authentication authentication) {
+        Activity activity = getRequired(id);
+        AuthenticatedUser manager = ensureCanManage(activity, authentication);
+        ensureStatus(activity, ActivityStatus.ONGOING);
+        activity.setStatus(ActivityStatus.ENDED);
+        activityMapper.updateById(activity);
+        operationLogService.record(manager.user().getId(), "ACTIVITY_MANUALLY_ENDED", "ACTIVITY", activity.getId());
         return ActivityView.from(activity);
     }
 
@@ -217,11 +231,12 @@ public class ActivityService {
         return user;
     }
 
-    private void ensureCanManage(Activity activity, Authentication authentication) {
+    private AuthenticatedUser ensureCanManage(Activity activity, Authentication authentication) {
         AuthenticatedUser user = requireOrganizer(authentication);
         if (user.getRole() != UserRole.ADMIN && !user.user().getId().equals(activity.getOrganizerId())) {
             throw new BusinessException(403, "不能管理其他组织者的活动");
         }
+        return user;
     }
 
     private void ensureStatus(Activity activity, ActivityStatus... allowed) {
@@ -289,7 +304,7 @@ public class ActivityService {
         activity.setRegistrationEndTime(request.registrationEndTime());
         activity.setCapacity(request.capacity());
         activity.setRequireFeedback(Boolean.TRUE.equals(request.requireFeedback()));
-        activity.setFeedbackDeadline(request.feedbackDeadline());
+        activity.setFeedbackDeadline(Boolean.TRUE.equals(request.requireFeedback()) ? request.feedbackDeadline() : null);
     }
 
     private String blankToNull(String value) {

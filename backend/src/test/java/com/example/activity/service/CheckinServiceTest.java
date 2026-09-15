@@ -4,8 +4,11 @@ import com.example.activity.dto.CheckinRequest;
 import com.example.activity.entity.Activity;
 import com.example.activity.entity.ActivityStatus;
 import com.example.activity.entity.Attendance;
+import com.example.activity.entity.AttendanceStatus;
 import com.example.activity.entity.CheckinAnomalyReason;
+import com.example.activity.entity.CheckinMethod;
 import com.example.activity.entity.CheckinToken;
+import com.example.activity.entity.Feedback;
 import com.example.activity.entity.Registration;
 import com.example.activity.entity.RegistrationStatus;
 import com.example.activity.entity.User;
@@ -15,6 +18,7 @@ import com.example.activity.exception.BusinessException;
 import com.example.activity.mapper.ActivityMapper;
 import com.example.activity.mapper.AttendanceMapper;
 import com.example.activity.mapper.CheckinTokenMapper;
+import com.example.activity.mapper.FeedbackMapper;
 import com.example.activity.mapper.RegistrationMapper;
 import com.example.activity.mapper.UserMapper;
 import com.example.activity.security.AuthenticatedUser;
@@ -43,6 +47,9 @@ class CheckinServiceTest {
     private RegistrationMapper registrationMapper;
     private AttendanceMapper attendanceMapper;
     private CheckinAnomalyService checkinAnomalyService;
+    private FeedbackMapper feedbackMapper;
+    private OperationLogService operationLogService;
+    private UserMapper userMapper;
     private CheckinService checkinService;
     private Authentication participantAuthentication;
     private User participant;
@@ -53,15 +60,19 @@ class CheckinServiceTest {
         checkinTokenMapper = mock(CheckinTokenMapper.class);
         registrationMapper = mock(RegistrationMapper.class);
         attendanceMapper = mock(AttendanceMapper.class);
-        UserMapper userMapper = mock(UserMapper.class);
+        userMapper = mock(UserMapper.class);
         checkinAnomalyService = mock(CheckinAnomalyService.class);
+        feedbackMapper = mock(FeedbackMapper.class);
+        operationLogService = mock(OperationLogService.class);
         checkinService = new CheckinService(
                 activityMapper,
                 checkinTokenMapper,
                 registrationMapper,
                 attendanceMapper,
                 userMapper,
-                checkinAnomalyService
+                checkinAnomalyService,
+                feedbackMapper,
+                operationLogService
         );
 
         participant = new User();
@@ -225,6 +236,63 @@ class CheckinServiceTest {
         );
     }
 
+    @Test
+    void organizerCanManuallyCheckInRegisteredParticipant() {
+        Activity activity = locationRestrictedActivity();
+        activity.setOrganizerId(7L);
+        when(activityMapper.selectById(11L)).thenReturn(activity);
+        when(userMapper.selectById(8L)).thenReturn(participant);
+        when(attendanceMapper.insert(any(Attendance.class))).thenAnswer(invocation -> {
+            Attendance attendance = invocation.getArgument(0);
+            attendance.setId(30L);
+            return 1;
+        });
+
+        var result = checkinService.manualCheckin(11L, 8L, organizerAuthentication());
+
+        assertEquals(CheckinMethod.MANUAL.name(), result.checkinMethod());
+        verify(operationLogService).record(7L, "ATTENDANCE_MANUAL_CHECKIN", "ATTENDANCE", 30L);
+    }
+
+    @Test
+    void organizerCanCancelAttendanceWithoutFeedback() {
+        Activity activity = locationRestrictedActivity();
+        activity.setOrganizerId(7L);
+        Attendance attendance = new Attendance();
+        attendance.setId(30L);
+        attendance.setActivityId(11L);
+        attendance.setUserId(8L);
+        attendance.setStatus(AttendanceStatus.SUCCESS);
+        when(activityMapper.selectById(11L)).thenReturn(activity);
+        when(attendanceMapper.selectByActivityAndUser(11L, 8L)).thenReturn(attendance);
+
+        checkinService.cancelAttendance(11L, 8L, organizerAuthentication());
+
+        assertEquals(AttendanceStatus.CANCELLED, attendance.getStatus());
+        verify(attendanceMapper).updateById(attendance);
+        verify(operationLogService).record(7L, "ATTENDANCE_CANCELLED", "ATTENDANCE", 30L);
+    }
+
+    @Test
+    void cannotCancelAttendanceAfterParticipantSubmittedFeedback() {
+        Activity activity = locationRestrictedActivity();
+        activity.setOrganizerId(7L);
+        Attendance attendance = new Attendance();
+        attendance.setId(30L);
+        attendance.setStatus(AttendanceStatus.SUCCESS);
+        when(activityMapper.selectById(11L)).thenReturn(activity);
+        when(attendanceMapper.selectByActivityAndUser(11L, 8L)).thenReturn(attendance);
+        when(feedbackMapper.selectByActivityAndUser(11L, 8L)).thenReturn(new Feedback());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> checkinService.cancelAttendance(11L, 8L, organizerAuthentication())
+        );
+
+        assertEquals(409, exception.getCode());
+        verify(attendanceMapper, never()).updateById(attendance);
+    }
+
     private Activity locationRestrictedActivity() {
         Activity activity = new Activity();
         activity.setId(11L);
@@ -235,5 +303,18 @@ class CheckinServiceTest {
         activity.setCheckinLongitude(121.4737);
         activity.setCheckinRadiusMeters(100);
         return activity;
+    }
+
+    private Authentication organizerAuthentication() {
+        User organizer = new User();
+        organizer.setId(7L);
+        organizer.setUsername("organizer");
+        organizer.setName("组织者");
+        organizer.setRole(UserRole.ORGANIZER);
+        organizer.setStatus(UserStatus.ACTIVE);
+        AuthenticatedUser authenticatedUser = AuthenticatedUser.from(organizer);
+        return new UsernamePasswordAuthenticationToken(
+                authenticatedUser, null, authenticatedUser.getAuthorities()
+        );
     }
 }

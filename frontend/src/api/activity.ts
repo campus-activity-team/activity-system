@@ -26,6 +26,10 @@ export function startActivity(id: number) {
   return http.post<ApiEnvelope<Activity>>(`/activities/${id}/start`)
 }
 
+export function endActivity(id: number) {
+  return http.post<ApiEnvelope<Activity>>(`/activities/${id}/end`)
+}
+
 export function deleteActivity(id: number) {
   return http.delete<ApiEnvelope<null>>(`/activities/${id}`)
 }

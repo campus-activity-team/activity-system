@@ -22,8 +22,20 @@ export function getActivityRegistrations(activityId: number) {
   return http.get<ApiEnvelope<Registration[]>>(`/organizer/activities/${activityId}/registrations`)
 }
 
+export function exportActivityRoster(activityId: number) {
+  return http.get<Blob>(`/organizer/activities/${activityId}/registrations/export`, { responseType: 'blob' })
+}
+
 export function getActivityAttendances(activityId: number) {
   return http.get<ApiEnvelope<Attendance[]>>(`/organizer/activities/${activityId}/attendances`)
+}
+
+export function manualCheckinParticipant(activityId: number, userId: number) {
+  return http.post<ApiEnvelope<Attendance>>(`/organizer/activities/${activityId}/attendances/${userId}`)
+}
+
+export function cancelParticipantAttendance(activityId: number, userId: number) {
+  return http.delete<ApiEnvelope<null>>(`/organizer/activities/${activityId}/attendances/${userId}`)
 }
 
 export function getActivityCheckinAnomalies(activityId: number) {

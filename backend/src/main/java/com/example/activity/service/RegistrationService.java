@@ -19,11 +19,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
 public class RegistrationService {
+
+    private static final DateTimeFormatter CSV_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final ActivityMapper activityMapper;
     private final RegistrationMapper registrationMapper;
@@ -122,12 +126,27 @@ public class RegistrationService {
     public List<RegistrationView> listForActivity(Long activityId, Authentication authentication) {
         Activity activity = requiredActivity(activityId);
         ensureCanManage(activity, authentication);
-        return registrationMapper.selectList(Wrappers.<Registration>lambdaQuery()
-                        .eq(Registration::getActivityId, activityId)
-                        .orderByDesc(Registration::getRegisteredAt))
+        return registrationMapper.selectByActivityId(activityId)
                 .stream()
                 .map(registration -> toView(registration, activity, userMapper.selectById(registration.getUserId())))
                 .toList();
+    }
+
+    public byte[] exportForActivity(Long activityId, Authentication authentication) {
+        List<RegistrationView> registrations = listForActivity(activityId, authentication);
+        StringBuilder csv = new StringBuilder("\uFEFF姓名,用户名,学号,报名状态,报名时间,签到状态,签到时间,签到方式\r\n");
+        for (RegistrationView registration : registrations) {
+            csv.append(csvCell(registration.name())).append(',')
+                    .append(csvCell(registration.username())).append(',')
+                    .append(csvCell(registration.studentId())).append(',')
+                    .append(csvCell(registration.status() == RegistrationStatus.REGISTERED ? "已报名" : "已取消")).append(',')
+                    .append(csvCell(formatCsvTime(registration.registeredAt()))).append(',')
+                    .append(csvCell(registration.checkedIn() ? "已签到" : "未签到")).append(',')
+                    .append(csvCell(formatCsvTime(registration.checkinTime()))).append(',')
+                    .append(csvCell(checkinMethodLabel(registration.checkinMethod())))
+                    .append("\r\n");
+        }
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     private void ensureRegistrationOpen(Activity activity) {
@@ -183,6 +202,9 @@ public class RegistrationService {
                 registration.getId(),
                 activity.getId(),
                 activity.getTitle(),
+                ActivityStatusResolver.resolve(activity, LocalDateTime.now()),
+                Boolean.TRUE.equals(activity.getRequireFeedback()),
+                activity.getFeedbackDeadline(),
                 user.getId(),
                 user.getUsername(),
                 user.getName(),
@@ -191,7 +213,27 @@ public class RegistrationService {
                 registration.getRegisteredAt(),
                 registration.getCancelledAt(),
                 checkedIn,
-                attendance == null ? null : attendance.getCheckinTime()
+                checkedIn ? attendance.getCheckinTime() : null,
+                checkedIn ? attendance.getCheckinMethod().name() : null
         );
+    }
+
+    private String formatCsvTime(LocalDateTime value) {
+        return value == null ? "" : CSV_TIME_FORMATTER.format(value);
+    }
+
+    private String checkinMethodLabel(String method) {
+        if (method == null) {
+            return "";
+        }
+        return "MANUAL".equals(method) ? "手动补签" : "二维码";
+    }
+
+    private String csvCell(String value) {
+        String safeValue = value == null ? "" : value;
+        if (!safeValue.isEmpty() && "=+-@".indexOf(safeValue.charAt(0)) >= 0) {
+            safeValue = "'" + safeValue;
+        }
+        return '"' + safeValue.replace("\"", "\"\"") + '"';
     }
 }

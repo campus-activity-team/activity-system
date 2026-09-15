@@ -4,19 +4,25 @@ import com.example.activity.common.ApiResponse;
 import com.example.activity.service.ActivityService;
 import com.example.activity.service.CheckinService;
 import com.example.activity.service.CheckinAnomalyService;
+import com.example.activity.service.FeedbackService;
 import com.example.activity.service.RegistrationService;
 import com.example.activity.vo.ActivityView;
 import com.example.activity.vo.AttendanceView;
 import com.example.activity.vo.CheckinTokenView;
 import com.example.activity.vo.CheckinAnomalyView;
+import com.example.activity.vo.FeedbackDashboardView;
 import com.example.activity.vo.RegistrationView;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -29,17 +35,20 @@ public class OrganizerActivityController {
     private final RegistrationService registrationService;
     private final CheckinService checkinService;
     private final CheckinAnomalyService checkinAnomalyService;
+    private final FeedbackService feedbackService;
 
     public OrganizerActivityController(
             ActivityService activityService,
             RegistrationService registrationService,
             CheckinService checkinService,
-            CheckinAnomalyService checkinAnomalyService
+            CheckinAnomalyService checkinAnomalyService,
+            FeedbackService feedbackService
     ) {
         this.activityService = activityService;
         this.registrationService = registrationService;
         this.checkinService = checkinService;
         this.checkinAnomalyService = checkinAnomalyService;
+        this.feedbackService = feedbackService;
     }
 
     @GetMapping
@@ -68,12 +77,51 @@ public class OrganizerActivityController {
         return ApiResponse.success(checkinService.listForActivity(id, authentication));
     }
 
+    @GetMapping("/{id}/registrations/export")
+    public ResponseEntity<byte[]> exportRegistrations(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        byte[] content = registrationService.exportForActivity(id, authentication);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=activity-" + id + "-roster.csv")
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .body(content);
+    }
+
+    @PostMapping("/{id}/attendances/{userId}")
+    public ApiResponse<AttendanceView> manualCheckin(
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        return ApiResponse.success(checkinService.manualCheckin(id, userId, authentication));
+    }
+
+    @DeleteMapping("/{id}/attendances/{userId}")
+    public ApiResponse<Void> cancelAttendance(
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        checkinService.cancelAttendance(id, userId, authentication);
+        return ApiResponse.success();
+    }
+
     @GetMapping("/{id}/checkin-anomalies")
     public ApiResponse<List<CheckinAnomalyView>> checkinAnomalies(
             @PathVariable Long id,
             Authentication authentication
     ) {
         return ApiResponse.success(checkinAnomalyService.listForActivity(id, authentication));
+    }
+
+    @GetMapping("/{id}/feedbacks")
+    public ApiResponse<FeedbackDashboardView> feedbacks(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        return ApiResponse.success(feedbackService.dashboard(id, authentication));
     }
 
     @PostMapping("/{id}/checkin-token")

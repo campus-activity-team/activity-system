@@ -3,12 +3,18 @@ package com.example.activity.config;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.activity.entity.Activity;
 import com.example.activity.entity.ActivityStatus;
+import com.example.activity.entity.Attendance;
+import com.example.activity.entity.AttendanceStatus;
+import com.example.activity.entity.CheckinMethod;
+import com.example.activity.entity.Feedback;
 import com.example.activity.entity.Registration;
 import com.example.activity.entity.RegistrationStatus;
 import com.example.activity.entity.User;
 import com.example.activity.entity.UserRole;
 import com.example.activity.entity.UserStatus;
 import com.example.activity.mapper.ActivityMapper;
+import com.example.activity.mapper.AttendanceMapper;
+import com.example.activity.mapper.FeedbackMapper;
 import com.example.activity.mapper.RegistrationMapper;
 import com.example.activity.mapper.UserMapper;
 import org.springframework.context.annotation.Profile;
@@ -23,21 +29,28 @@ import java.time.LocalDateTime;
 public class DevDataInitializer implements CommandLineRunner {
 
     private static final String ONGOING_ACTIVITY_TITLE = "【测试】现场签到演示活动";
+    private static final String FEEDBACK_ACTIVITY_TITLE = "【测试】往期演示活动";
 
     private final UserMapper userMapper;
     private final ActivityMapper activityMapper;
     private final RegistrationMapper registrationMapper;
+    private final AttendanceMapper attendanceMapper;
+    private final FeedbackMapper feedbackMapper;
     private final PasswordEncoder passwordEncoder;
 
     public DevDataInitializer(
             UserMapper userMapper,
             ActivityMapper activityMapper,
             RegistrationMapper registrationMapper,
+            AttendanceMapper attendanceMapper,
+            FeedbackMapper feedbackMapper,
             PasswordEncoder passwordEncoder
     ) {
         this.userMapper = userMapper;
         this.activityMapper = activityMapper;
         this.registrationMapper = registrationMapper;
+        this.attendanceMapper = attendanceMapper;
+        this.feedbackMapper = feedbackMapper;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -54,7 +67,9 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         if (organizer != null) {
             seedActivities(organizer.getId());
+            refreshOngoingDemoActivity();
             seedOngoingRegistrations();
+            seedFeedbackDemoData();
         }
     }
 
@@ -129,12 +144,12 @@ public class DevDataInitializer implements CommandLineRunner {
         );
         createActivityIfMissing(
                 organizerId,
-                "【测试】往期演示活动",
-                "用于验证已结束活动在公开活动列表中的展示。",
+                FEEDBACK_ACTIVITY_TITLE,
+                "用于验证已结束活动的参与者反馈和组织者统计看板。",
                 "大学生活动中心 B201",
                 now.minusDays(30), now.minusDays(15),
                 now.minusDays(14).withHour(14).withMinute(0), now.minusDays(14).withHour(16).withMinute(0),
-                100, ActivityStatus.ENDED, null, false, null
+                100, ActivityStatus.ENDED, null, true, now.plusDays(14)
         );
         createActivityIfMissing(
                 organizerId,
@@ -205,7 +220,7 @@ public class DevDataInitializer implements CommandLineRunner {
         if (activity == null) {
             return;
         }
-        for (String username : new String[]{"student", "student2"}) {
+        for (String username : new String[]{"student", "student2", "student3"}) {
             User user = userMapper.selectOne(Wrappers.<User>lambdaQuery().eq(User::getUsername, username));
             if (user == null || registrationMapper.selectByActivityAndUser(activity.getId(), user.getId()) != null) {
                 continue;
@@ -219,5 +234,87 @@ public class DevDataInitializer implements CommandLineRunner {
             activity.setCurrentRegisteredCount((activity.getCurrentRegisteredCount() == null ? 0 : activity.getCurrentRegisteredCount()) + 1);
         }
         activityMapper.updateById(activity);
+    }
+
+    private void refreshOngoingDemoActivity() {
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        Activity activity = activityMapper.selectOne(Wrappers.<Activity>lambdaQuery()
+                .eq(Activity::getTitle, ONGOING_ACTIVITY_TITLE));
+        if (activity == null || (activity.getEndTime() != null && activity.getEndTime().isAfter(now))) {
+            return;
+        }
+        activity.setRegistrationStartTime(now.minusDays(2));
+        activity.setRegistrationEndTime(now.plusHours(2));
+        activity.setStartTime(now.minusHours(1));
+        activity.setEndTime(now.plusHours(2));
+        activity.setStatus(ActivityStatus.ONGOING);
+        activityMapper.updateById(activity);
+    }
+
+    private void seedFeedbackDemoData() {
+        LocalDateTime now = LocalDateTime.now();
+        Activity activity = activityMapper.selectOne(Wrappers.<Activity>lambdaQuery()
+                .eq(Activity::getTitle, FEEDBACK_ACTIVITY_TITLE));
+        if (activity == null) {
+            return;
+        }
+
+        boolean activityChanged = !Boolean.TRUE.equals(activity.getRequireFeedback())
+                || activity.getFeedbackDeadline() == null
+                || !activity.getFeedbackDeadline().isAfter(now);
+        if (activityChanged) {
+            activity.setRequireFeedback(true);
+            activity.setFeedbackDeadline(now.plusDays(14));
+            activityMapper.updateById(activity);
+        }
+
+        for (String username : new String[]{"student", "student2"}) {
+            User user = userMapper.selectOne(Wrappers.<User>lambdaQuery().eq(User::getUsername, username));
+            if (user == null) {
+                continue;
+            }
+            Registration registration = registrationMapper.selectByActivityAndUser(activity.getId(), user.getId());
+            if (registration == null) {
+                registration = new Registration();
+                registration.setActivityId(activity.getId());
+                registration.setUserId(user.getId());
+                registration.setStatus(RegistrationStatus.REGISTERED);
+                registration.setRegisteredAt(activity.getStartTime().minusDays(1));
+                registrationMapper.insert(registration);
+                int count = activity.getCurrentRegisteredCount() == null ? 0 : activity.getCurrentRegisteredCount();
+                activity.setCurrentRegisteredCount(count + 1);
+                activityMapper.updateById(activity);
+            } else if (registration.getStatus() != RegistrationStatus.REGISTERED) {
+                registration.setStatus(RegistrationStatus.REGISTERED);
+                registration.setCancelledAt(null);
+                registrationMapper.updateById(registration);
+                int count = activity.getCurrentRegisteredCount() == null ? 0 : activity.getCurrentRegisteredCount();
+                activity.setCurrentRegisteredCount(count + 1);
+                activityMapper.updateById(activity);
+            }
+
+            if (attendanceMapper.selectByActivityAndUser(activity.getId(), user.getId()) == null) {
+                Attendance attendance = new Attendance();
+                attendance.setActivityId(activity.getId());
+                attendance.setUserId(user.getId());
+                attendance.setRegistrationId(registration.getId());
+                attendance.setCheckinTime(activity.getStartTime().plusMinutes(5));
+                attendance.setCheckinMethod(CheckinMethod.QR_CODE);
+                attendance.setStatus(AttendanceStatus.SUCCESS);
+                attendanceMapper.insert(attendance);
+            }
+
+            if ("student2".equals(username)
+                    && feedbackMapper.selectByActivityAndUser(activity.getId(), user.getId()) == null) {
+                Feedback feedback = new Feedback();
+                feedback.setActivityId(activity.getId());
+                feedback.setUserId(user.getId());
+                feedback.setOverallRating(5);
+                feedback.setContentRating(5);
+                feedback.setServiceRating(4);
+                feedback.setComment("活动内容清晰，现场组织顺畅，希望以后增加更多交流时间。");
+                feedbackMapper.insert(feedback);
+            }
+        }
     }
 }

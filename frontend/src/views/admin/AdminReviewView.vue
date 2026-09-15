@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { approveActivity, getAdminActivities, publishActivity, rejectActivity, startActivity, unpublishActivity } from '../../api/activity'
+import { approveActivity, endActivity, getAdminActivities, publishActivity, rejectActivity, startActivity, unpublishActivity } from '../../api/activity'
 import type { Activity } from '../../types/activity'
 
 const loading = ref(false)
@@ -70,6 +70,17 @@ async function start(id: number) {
   }
 }
 
+async function end(id: number) {
+  try {
+    await ElMessageBox.confirm('确定立即结束活动？结束后将停止签到并进入反馈阶段。', '手动结束活动', { type: 'warning' })
+    await endActivity(id)
+    ElMessage.success('活动已结束')
+    await loadReviews()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '结束活动失败')
+  }
+}
+
 onMounted(loadReviews)
 </script>
 
@@ -82,7 +93,7 @@ onMounted(loadReviews)
       <el-table-column prop="location" label="地点" width="160" />
       <el-table-column prop="capacity" label="人数上限" width="100" />
       <el-table-column prop="status" label="状态" width="100" />
-      <el-table-column label="操作" min-width="300"><template #default="{ row }"><el-button v-if="row.status === 'PENDING_REVIEW'" type="success" size="small" @click="approve(row.id)">通过</el-button><el-button v-if="row.status === 'PENDING_REVIEW'" type="danger" size="small" @click="reject(row.id)">驳回</el-button><el-button v-if="row.status === 'APPROVED'" type="primary" size="small" @click="publish(row.id)">发布</el-button><el-button v-if="row.status === 'PUBLISHED'" type="success" size="small" @click="start(row.id)">手动开启</el-button><el-button v-if="row.status === 'PUBLISHED' || row.status === 'ONGOING'" type="warning" size="small" @click="unpublish(row.id)">下架</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="380"><template #default="{ row }"><el-button v-if="row.status === 'PENDING_REVIEW'" type="success" size="small" @click="approve(row.id)">通过</el-button><el-button v-if="row.status === 'PENDING_REVIEW'" type="danger" size="small" @click="reject(row.id)">驳回</el-button><el-button v-if="row.status === 'APPROVED'" type="primary" size="small" @click="publish(row.id)">发布</el-button><el-button v-if="row.status === 'PUBLISHED'" type="success" size="small" @click="start(row.id)">手动开启</el-button><el-button v-if="row.status === 'ONGOING'" type="danger" size="small" @click="end(row.id)">立即结束</el-button><el-button v-if="row.status === 'PUBLISHED' || row.status === 'ONGOING'" type="warning" size="small" @click="unpublish(row.id)">下架</el-button></template></el-table-column>
     </el-table>
   </div>
 </template>

@@ -1,5 +1,6 @@
 package com.example.activity.vo;
 
+import com.example.activity.entity.ActivityStatus;
 import com.example.activity.entity.RegistrationStatus;
 
 import java.time.LocalDateTime;
@@ -8,6 +9,9 @@ public record RegistrationView(
         Long id,
         Long activityId,
         String activityTitle,
+        ActivityStatus activityStatus,
+        boolean requireFeedback,
+        LocalDateTime feedbackDeadline,
         Long userId,
         String username,
         String name,
@@ -16,6 +20,7 @@ public record RegistrationView(
         LocalDateTime registeredAt,
         LocalDateTime cancelledAt,
         boolean checkedIn,
-        LocalDateTime checkinTime
+        LocalDateTime checkinTime,
+        String checkinMethod
 ) {
 }

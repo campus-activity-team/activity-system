@@ -2,11 +2,13 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
-import { createActivity, deleteActivity, getMyActivities, startActivity, submitActivity, updateActivity } from '../../api/activity'
+import { createActivity, deleteActivity, endActivity, getMyActivities, startActivity, submitActivity, updateActivity } from '../../api/activity'
 import { generateActivityCopy } from '../../api/ai'
-import { getActivityAttendances, getActivityCheckinAnomalies, getActivityRegistrations, issueCheckinToken } from '../../api/registration'
+import { getActivityFeedbackDashboard } from '../../api/feedback'
+import { cancelParticipantAttendance, exportActivityRoster, getActivityAttendances, getActivityCheckinAnomalies, getActivityRegistrations, issueCheckinToken, manualCheckinParticipant } from '../../api/registration'
 import type { Activity, ActivityPayload } from '../../types/activity'
 import type { ActivityCopyRequest, ActivityCopyResponse } from '../../types/ai'
+import type { FeedbackDashboard } from '../../types/feedback'
 import type { Attendance, CheckinAnomaly, CheckinAnomalyReason, CheckinToken, Registration } from '../../types/registration'
 
 const loading = ref(false)
@@ -35,7 +37,10 @@ const detailActivity = ref<Activity | null>(null)
 const detailRegistrations = ref<Registration[]>([])
 const detailAttendances = ref<Attendance[]>([])
 const detailCheckinAnomalies = ref<CheckinAnomaly[]>([])
+const detailFeedbackDashboard = ref<FeedbackDashboard | null>(null)
 const detailLoading = ref(false)
+const exportingRoster = ref(false)
+const attendanceChangingUserId = ref<number | null>(null)
 const checkinToken = ref<CheckinToken | null>(null)
 const checkinQrCode = ref('')
 const tokenCountdown = ref(0)
@@ -182,6 +187,21 @@ async function startActivityNow(id: number) {
   }
 }
 
+async function endActivityNow(id: number) {
+  try {
+    await ElMessageBox.confirm('确定立即结束活动？结束后将停止扫码签到，并开放已配置的活动反馈。', '手动结束活动', { type: 'warning' })
+    await endActivity(id)
+    ElMessage.success('活动已结束')
+    await loadActivities()
+    if (detailActivity.value?.id === id) {
+      detailActivity.value = activities.value.find((activity) => activity.id === id) ?? null
+      await loadActivityDetailData(false)
+    }
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '结束活动失败')
+  }
+}
+
 async function openActivityDetail(activity: Activity) {
   detailActivity.value = activity
   detailDialogVisible.value = true
@@ -194,14 +214,16 @@ async function loadActivityDetailData(showLoading: boolean) {
   if (!detailActivity.value) return
   if (showLoading) detailLoading.value = true
   try {
-    const [registrationResponse, attendanceResponse, anomalyResponse] = await Promise.all([
+    const [registrationResponse, attendanceResponse, anomalyResponse, feedbackResponse] = await Promise.all([
       getActivityRegistrations(detailActivity.value.id),
       getActivityAttendances(detailActivity.value.id),
       getActivityCheckinAnomalies(detailActivity.value.id),
+      getActivityFeedbackDashboard(detailActivity.value.id),
     ])
     detailRegistrations.value = registrationResponse.data.data
     detailAttendances.value = attendanceResponse.data.data
     detailCheckinAnomalies.value = anomalyResponse.data.data
+    detailFeedbackDashboard.value = feedbackResponse.data.data
     attendanceSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (error: any) {
     if (showLoading) ElMessage.error(error?.response?.data?.message ?? '活动详情加载失败')
@@ -216,6 +238,72 @@ function anomalyLocation(anomaly: CheckinAnomaly) {
     return `${anomaly.latitude.toFixed(5)}, ${anomaly.longitude.toFixed(5)}`
   }
   return '未提供定位'
+}
+
+function checkinMethodLabel(method?: string) {
+  if (!method) return '-'
+  return method === 'MANUAL' ? '手动补签' : '二维码'
+}
+
+async function downloadRoster() {
+  if (!detailActivity.value) return
+  exportingRoster.value = true
+  try {
+    const response = await exportActivityRoster(detailActivity.value.id)
+    const downloadUrl = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = `activity-${detailActivity.value.id}-roster.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(downloadUrl)
+    ElMessage.success('报名与签到名单已导出')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message ?? '名单导出失败')
+  } finally {
+    exportingRoster.value = false
+  }
+}
+
+async function manualCheckin(registration: Registration) {
+  if (!detailActivity.value) return
+  try {
+    await ElMessageBox.confirm(`确认为 ${registration.name} 手动补签？`, '手动补签', { type: 'warning' })
+    attendanceChangingUserId.value = registration.userId
+    await manualCheckinParticipant(detailActivity.value.id, registration.userId)
+    ElMessage.success('手动补签成功')
+    await loadActivityDetailData(false)
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '手动补签失败')
+  } finally {
+    attendanceChangingUserId.value = null
+  }
+}
+
+async function cancelAttendance(registration: Registration) {
+  if (!detailActivity.value) return
+  try {
+    await ElMessageBox.confirm(`撤销 ${registration.name} 的签到记录？`, '撤销签到', { type: 'warning' })
+    attendanceChangingUserId.value = registration.userId
+    await cancelParticipantAttendance(detailActivity.value.id, registration.userId)
+    ElMessage.success('签到记录已撤销')
+    await loadActivityDetailData(false)
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message ?? '撤销签到失败')
+  } finally {
+    attendanceChangingUserId.value = null
+  }
+}
+
+function feedbackDistributionPercentage(rating: number) {
+  const dashboard = detailFeedbackDashboard.value
+  if (!dashboard || dashboard.feedbackCount === 0) return 0
+  return Math.round(((dashboard.overallRatingDistribution[rating] ?? 0) * 100) / dashboard.feedbackCount)
+}
+
+function formatTime(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 16) : '未设置'
 }
 
 function isLocalOnlyHostname(hostname: string) {
@@ -276,6 +364,7 @@ function closeDetailDialog() {
   detailDialogVisible.value = false
   checkinToken.value = null
   checkinQrCode.value = ''
+  detailFeedbackDashboard.value = null
   tokenCountdown.value = 0
   if (tokenTimer) {
     clearInterval(tokenTimer)
@@ -375,6 +464,9 @@ onUnmounted(() => {
         <div class="form-columns">
           <el-form-item label="人数上限"><el-input-number v-model="form.capacity" :min="1" /></el-form-item>
           <el-form-item label="活动结束后收集反馈"><el-switch v-model="form.requireFeedback" /></el-form-item>
+          <el-form-item v-if="form.requireFeedback" label="反馈截止时间">
+            <el-date-picker v-model="form.feedbackDeadline" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="不填则长期开放" />
+          </el-form-item>
         </div>
         <el-button type="primary" :loading="saving" @click="saveDraft">{{ editingId ? '保存修改' : '保存草稿' }}</el-button>
         <el-button v-if="editingId" @click="resetForm">取消编辑</el-button>
@@ -384,7 +476,7 @@ onUnmounted(() => {
       <el-table-column prop="title" label="活动名称" min-width="180" />
       <el-table-column prop="status" label="状态" width="110"><template #default="{ row }"><el-tag>{{ statusLabel[row.status] ?? row.status }}</el-tag></template></el-table-column>
       <el-table-column prop="capacity" label="容量" width="90" />
-      <el-table-column label="操作" min-width="360"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'PUBLISHED'" link type="success" @click="startActivityNow(row.id)">手动开启</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="420"><template #default="{ row }"><el-button link type="primary" @click="openActivityDetail(row)">详情/名单</el-button><el-button v-if="row.status === 'PUBLISHED'" link type="success" @click="startActivityNow(row.id)">手动开启</el-button><el-button v-if="row.status === 'ONGOING'" link type="warning" @click="endActivityNow(row.id)">立即结束</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="editActivity(row)">编辑</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="primary" @click="submitForReview(row.id)">提交审核</el-button><el-button v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" link type="danger" @click="removeActivity(row.id)">删除</el-button></template></el-table-column>
     </el-table>
     <el-dialog v-model="aiDialogVisible" title="DeepSeek AI 活动文案助手" width="min(720px, 92vw)" destroy-on-close>
       <el-alert title="AI 生成内容仅作为草稿，不会自动保存或提交审核，请在应用后人工检查。" type="info" :closable="false" show-icon />
@@ -420,7 +512,7 @@ onUnmounted(() => {
         <el-button type="primary" :disabled="!aiResult" @click="applyAiResult">应用到活动表单</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="detailDialogVisible" title="活动详情与报名名单" width="min(900px, 94vw)" @closed="closeDetailDialog">
+    <el-dialog v-model="detailDialogVisible" title="活动详情与现场管理" width="min(1000px, 94vw)" @closed="closeDetailDialog">
       <div v-loading="detailLoading" v-if="detailActivity">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="活动名称">{{ detailActivity.title }}</el-descriptions-item>
@@ -428,6 +520,7 @@ onUnmounted(() => {
           <el-descriptions-item label="活动地点">{{ detailActivity.location }}</el-descriptions-item>
           <el-descriptions-item label="报名情况">{{ detailActivity.currentRegisteredCount }} / {{ detailActivity.capacity }}</el-descriptions-item>
           <el-descriptions-item label="活动时间" :span="2">{{ detailActivity.startTime.replace('T', ' ').slice(0, 16) }} 至 {{ detailActivity.endTime.replace('T', ' ').slice(0, 16) }}</el-descriptions-item>
+          <el-descriptions-item v-if="detailActivity.requireFeedback" label="反馈截止" :span="2">{{ formatTime(detailActivity.feedbackDeadline) }}</el-descriptions-item>
         </el-descriptions>
         <h3>活动介绍</h3>
         <p class="detail-description">{{ detailActivity.description }}</p>
@@ -452,6 +545,10 @@ onUnmounted(() => {
         </div>
         <el-tabs>
           <el-tab-pane :label="`报名名单（${detailRegistrations.length}）`">
+            <div class="attendance-sync-bar">
+              <small>导出文件包含报名状态、签到状态、时间和签到方式。</small>
+              <el-button type="primary" plain :loading="exportingRoster" @click="downloadRoster">导出 CSV 名单</el-button>
+            </div>
             <el-empty v-if="detailRegistrations.length === 0" description="暂无报名" />
             <el-table v-else :data="detailRegistrations" stripe>
               <el-table-column prop="name" label="姓名" width="120" />
@@ -459,6 +556,25 @@ onUnmounted(() => {
               <el-table-column prop="studentId" label="学号" width="150" />
               <el-table-column prop="status" label="报名状态" width="110" />
               <el-table-column prop="checkedIn" label="签到" width="90"><template #default="{ row }">{{ row.checkedIn ? '已签到' : '未签到' }}</template></el-table-column>
+              <el-table-column label="签到方式" width="100"><template #default="{ row }">{{ checkinMethodLabel(row.checkinMethod) }}</template></el-table-column>
+              <el-table-column v-if="detailActivity.status === 'ONGOING' || detailActivity.status === 'ENDED'" label="现场操作" width="120">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.status === 'REGISTERED' && !row.checkedIn"
+                    link
+                    type="success"
+                    :loading="attendanceChangingUserId === row.userId"
+                    @click="manualCheckin(row)"
+                  >手动补签</el-button>
+                  <el-button
+                    v-else-if="row.checkedIn"
+                    link
+                    type="danger"
+                    :loading="attendanceChangingUserId === row.userId"
+                    @click="cancelAttendance(row)"
+                  >撤销签到</el-button>
+                </template>
+              </el-table-column>
             </el-table>
           </el-tab-pane>
           <el-tab-pane :label="`签到记录（${detailAttendances.length}）`">
@@ -472,6 +588,7 @@ onUnmounted(() => {
               <el-table-column prop="username" label="用户名" width="150" />
               <el-table-column prop="studentId" label="学号" width="150" />
               <el-table-column prop="checkinTime" label="签到时间" min-width="180" />
+              <el-table-column label="签到方式" width="110"><template #default="{ row }">{{ checkinMethodLabel(row.checkinMethod) }}</template></el-table-column>
             </el-table>
           </el-tab-pane>
           <el-tab-pane :label="`异常尝试（${detailCheckinAnomalies.length}）`">
@@ -491,6 +608,37 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column prop="createdAt" label="尝试时间" min-width="180" />
             </el-table>
+          </el-tab-pane>
+          <el-tab-pane v-if="detailActivity.requireFeedback" :label="`反馈统计（${detailFeedbackDashboard?.feedbackCount ?? 0}）`">
+            <template v-if="detailFeedbackDashboard">
+              <div class="feedback-metrics">
+                <div><strong>{{ detailFeedbackDashboard.registeredCount }}</strong><span>报名人数</span></div>
+                <div><strong>{{ detailFeedbackDashboard.attendedCount }}</strong><span>签到人数</span></div>
+                <div><strong>{{ detailFeedbackDashboard.feedbackCount }}</strong><span>反馈份数</span></div>
+                <div><strong>{{ detailFeedbackDashboard.responseRate }}%</strong><span>反馈率</span></div>
+              </div>
+              <div class="feedback-rating-grid">
+                <el-card shadow="never"><span>总体评分</span><strong>{{ detailFeedbackDashboard.averageOverallRating.toFixed(1) }}</strong><el-rate :model-value="detailFeedbackDashboard.averageOverallRating" disabled /></el-card>
+                <el-card shadow="never"><span>内容评分</span><strong>{{ detailFeedbackDashboard.averageContentRating.toFixed(1) }}</strong><el-rate :model-value="detailFeedbackDashboard.averageContentRating" disabled /></el-card>
+                <el-card shadow="never"><span>服务评分</span><strong>{{ detailFeedbackDashboard.averageServiceRating.toFixed(1) }}</strong><el-rate :model-value="detailFeedbackDashboard.averageServiceRating" disabled /></el-card>
+              </div>
+              <div class="feedback-distribution">
+                <div v-for="rating in [5, 4, 3, 2, 1]" :key="rating">
+                  <span>{{ rating }} 星</span>
+                  <el-progress :percentage="feedbackDistributionPercentage(rating)" :stroke-width="10" />
+                  <small>{{ detailFeedbackDashboard.overallRatingDistribution[rating] ?? 0 }} 份</small>
+                </div>
+              </div>
+              <el-alert title="反馈内容默认匿名展示，不向活动发起者提供评价者身份。" type="info" show-icon :closable="false" />
+              <el-empty v-if="detailFeedbackDashboard.feedbacks.length === 0" description="暂无参与者反馈" />
+              <el-table v-else :data="detailFeedbackDashboard.feedbacks" stripe>
+                <el-table-column prop="overallRating" label="总体" width="70" />
+                <el-table-column prop="contentRating" label="内容" width="70" />
+                <el-table-column prop="serviceRating" label="服务" width="70" />
+                <el-table-column prop="comment" label="匿名意见" min-width="260"><template #default="{ row }">{{ row.comment || '未填写' }}</template></el-table-column>
+                <el-table-column label="提交时间" width="165"><template #default="{ row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template></el-table-column>
+              </el-table>
+            </template>
           </el-tab-pane>
         </el-tabs>
       </div>
